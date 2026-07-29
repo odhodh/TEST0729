@@ -71,7 +71,7 @@ export default function Home() {
       const data = await response.json() as Generated;
       if (!data.perspectives?.length) throw new Error();
       setGenerated(data);
-    } catch { setShowFallbackCases(true); setNotice("Gemini 사례 카드를 불러오지 못해 주제 기반 기본 사례를 표시했습니다."); }
+    } catch { setShowFallbackCases(true); setNotice(""); }
     setLoading(false);
   }
   async function generatePaths() {
@@ -116,4 +116,18 @@ function Header({ eyebrow, title, description }: { eyebrow: string; title: strin
 function LoadingCards() { return <div className="lens-cards loading-cards">{Array.from({ length: 10 }, (_, index) => <div key={index}><i /><b /><b /><em /></div>)}</div>; }
 function FooterActions({ back, next, nextLabel, disabled = false }: { back: () => void; next: () => void; nextLabel: string; disabled?: boolean }) { return <div className="footer-actions"><button onClick={back}>← 이전</button><button onClick={next} className="next" disabled={disabled}>{nextLabel}</button></div>; }
 function Report({ title, items }: { title: string; items: string[][] }) { return <section className="report"><h2>{title}</h2>{items.map(([number, heading, text]) => <article key={number}><b>{number}</b><div><strong>{heading}</strong><p>{text}</p><small>• 넣을 내용과 근거 자료를 구체적으로 기록하기</small></div></article>)}</section>; }
-function fallbackCase(topic: string, lens: Lens) { return { caseTitle: `${topic}을(를) ${lens.name}의 렌즈로 다시 보기`, connection: `${topic}과(와) ${lens.name} 관점을 연결해 핵심 요소와 실제 적용 장면을 비교해 보는 탐구입니다.`, question: lens.question }; }
+function fallbackCase(topic: string, lens: Lens) {
+  const cases: Record<string, { caseTitle: string; connection: string; question: string }> = {
+    definition: { caseTitle: `‘${topic}’에 포함되는 대상을 가르는 기준표 만들기`, connection: `기사·교과서·공개 자료에서 ‘${topic}’이라고 부르는 대상을 모아 공통 요소와 제외 기준을 표로 정리합니다. 같은 이름을 쓰지만 서로 다른 대상을 가리키는 장면을 찾아, 탐구 대상이 어디까지인지 구체적으로 확인합니다.`, question: `‘${topic}’이라고 부르기 위해 반드시 갖추어야 할 요소와 제외해야 할 요소는 무엇인가?` },
+    scope: { caseTitle: `조건이 달라질 때 ‘${topic}’의 효과가 흔들리는 지점`, connection: `서로 다른 환경·대상·시간대에서 나타난 ‘${topic}’ 사례를 같은 기준으로 비교합니다. 잘 설명되는 사례와 그렇지 않은 사례를 나란히 놓아, 어느 조건까지 같은 설명이 유지되는지 경계선을 찾아봅니다.`, question: `‘${topic}’은 어떤 조건·대상·범위까지 같은 방식으로 설명되며, 어디서부터 달라지는가?` },
+    similarity: { caseTitle: `‘${topic}’과 닮은 구조를 가진 다른 사례 나란히 놓기`, connection: `‘${topic}’의 핵심 과정과 비슷한 흐름을 보이는 다른 분야의 사례를 찾아 단계·요소·결과를 표로 비교합니다. 겉모습은 달라도 같은 구조가 반복되는지, 반대로 결정적으로 다른 부분은 무엇인지 확인합니다.`, question: `‘${topic}’과 닮은 구조를 가진 사례는 무엇이며, 두 사례를 가르는 차이는 무엇인가?` },
+    hierarchy: { caseTitle: `‘${topic}’을 움직이는 토대와 결과의 층위 지도`, connection: `개인·조직·제도 또는 기초 개념·방법·결과처럼 ‘${topic}’의 요소를 층위별로 나눕니다. 아래층의 변화가 위층의 현상으로 이어지는 실제 사례를 추적하며, 무엇이 전제이고 무엇이 결과인지 지도를 만듭니다.`, question: `‘${topic}’에서 가장 근본적인 토대는 무엇이며, 어떤 결과들이 그 위에서 파생되는가?` },
+    variable: { caseTitle: `‘${topic}’의 결과를 바꾸는 한 가지 변수씩 비교하기`, connection: `‘${topic}’과 관련된 사례를 모아 대상·시간·비용·환경·규모처럼 결과를 바꿀 수 있는 변수를 기록합니다. 다른 조건은 가능한 한 같게 두고 한 변수만 달라진 사례를 비교해, 변화가 어디서 시작되는지 살핍니다.`, question: `‘${topic}’의 결과를 가장 크게 바꾸는 변수는 무엇이며, 다른 변수와 어떻게 얽히는가?` },
+    condition: { caseTitle: `‘${topic}’이 성립하는 데 필요한 조건을 하나씩 빼 보기`, connection: `성공적으로 나타난 사례와 그렇지 않은 사례를 함께 모아 공통으로 갖춘 조건을 찾습니다. 조건 하나가 빠졌을 때 무엇이 달라지는지 자료와 사례를 따라가며, 필수 조건과 부수 조건을 구분합니다.`, question: `‘${topic}’이 성립하거나 작동하려면 반드시 갖추어야 할 조건은 무엇인가?` },
+    method: { caseTitle: `‘${topic}’을 확인하는 서로 다른 조사 도구 비교`, connection: `관찰 기록·설문·실험·통계·문헌 조사 중 ‘${topic}’을 확인하는 데 적절한 방법을 두 가지 이상 골라 봅니다. 같은 질문에 서로 다른 도구를 적용했을 때 얻는 근거와 놓치는 부분을 비교합니다.`, question: `‘${topic}’에 답하기 위해 어떤 자료와 조사 방법을 함께 사용해야 가장 설득력 있는 근거가 되는가?` },
+    exception: { caseTitle: `예상과 다르게 나타난 ‘${topic}’ 사례의 균열`, connection: `일반적인 설명으로는 잘 맞지 않는 ‘${topic}’ 사례를 찾아, 어떤 조건이 기존 규칙을 비껴 가게 했는지 기록합니다. 예외를 단순한 오류로 넘기지 않고, 기존 설명이 놓친 요인이나 새로운 가설의 출발점으로 삼습니다.`, question: `‘${topic}’에서 일반적인 설명이 깨지는 사례는 무엇이며, 그 균열은 무엇을 새로 설명해야 한다고 말하는가?` },
+    case: { caseTitle: `현실의 한 장면에서 만나는 ‘${topic}’`, connection: `학교·지역사회·산업·일상생활 가운데 ‘${topic}’이 실제로 드러나는 한 장면을 골라 자료를 수집합니다. 추상적인 개념이 구체적인 선택·행동·결과로 바뀌는 과정을 시간 순서와 관계자 관점으로 정리합니다.`, question: `선택한 현실 사례에서 ‘${topic}’은 어떤 과정과 결과로 구체화되는가?` },
+    model: { caseTitle: `‘${topic}’의 관계를 한눈에 보이는 모형으로 그리기`, connection: `‘${topic}’의 핵심 요소와 관계를 흐름도·그래프·개념도·표 중 하나로 옮깁니다. 여러 사례를 같은 모형에 넣어 보며 반복되는 연결과 끊어지는 지점을 시각적으로 비교합니다.`, question: `‘${topic}’을 어떤 모형으로 표현하면 핵심 요소와 관계, 그리고 빠진 부분까지 가장 잘 드러나는가?` },
+  };
+  return cases[lens.key] || { caseTitle: `${topic}의 구체적인 탐구 사례`, connection: `${topic}과(와) ${lens.name} 관점을 연결해 실제 자료와 사례를 비교합니다.`, question: lens.question };
+}

@@ -12,6 +12,14 @@ function parseJson(text: string) {
   return JSON.parse(start >= 0 && end >= start ? trimmed.slice(start, end + 1) : trimmed);
 }
 
+function validateCards(text: string) {
+  const generated = parseJson(text);
+  const cards = (generated?.perspectives || []) as PerspectiveCase[];
+  const valid = cards.filter((card) => keys.includes(card.key || "") && Boolean(card.caseTitle?.trim()) && Boolean(card.connection?.trim()) && Boolean(card.question?.trim()));
+  if (valid.length !== 10) throw new Error("incomplete cards");
+  return valid;
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as { topic?: string; direction?: string } | null;
   const topic = body?.topic?.trim();
@@ -52,12 +60,14 @@ JSON만 반환한다. 형식: ${schema}`;
   const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) return NextResponse.json({ error: "Gemini가 사례 카드 응답을 반환하지 않았습니다." }, { status: 502 });
   try {
-    const generated = parseJson(text);
-    const cards = (generated?.perspectives || []) as PerspectiveCase[];
-    const valid = cards.filter((card) => keys.includes(card.key || "") && Boolean(card.caseTitle?.trim()) && Boolean(card.connection?.trim()) && Boolean(card.question?.trim()));
-    if (valid.length !== 10) throw new Error("incomplete cards");
-    return NextResponse.json({ perspectives: valid });
+    return NextResponse.json({ perspectives: validateCards(text) });
   } catch {
+    const retry = await call(model, false);
+    if (retry.ok) {
+      const retryResult = await retry.json();
+      const retryText = retryResult?.candidates?.[0]?.content?.parts?.[0]?.text;
+      try { return NextResponse.json({ perspectives: validateCards(retryText || "") }); } catch { /* fall through */ }
+    }
     return NextResponse.json({ error: "Gemini 사례 카드 형식을 해석하지 못했습니다." }, { status: 502 });
   }
 }
