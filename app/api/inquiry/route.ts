@@ -35,7 +35,26 @@ export async function POST(request: Request) {
   if (!topic) return NextResponse.json({ error: "주제를 입력해 주세요." }, { status: 400 });
   if (!apiKey) return NextResponse.json({ error: "Vercel 환경 변수 GEMINI_API_KEY를 설정해 주세요." }, { status: 503 });
   const schema = `{\"perspectives\":[${keys.map((key) => `{\"key\":\"${key}\",\"caseTitle\":\"구체적 실제 사례 제목\",\"connection\":\"주제와 관점이 연결되는 2~3문장 설명\",\"question\":\"학생이 확인할 탐구 질문\"}`).join(",")}],\"paths\":[{\"title\":\"...\",\"text\":\"...\",\"detail\":\"...\"},{\"title\":\"...\",\"text\":\"...\",\"detail\":\"...\"},{\"title\":\"...\",\"text\":\"...\",\"detail\":\"...\"}],\"basic\":{\"what\":\"...\",\"how\":\"...\",\"discover\":\"...\"},\"deepening\":[{\"title\":\"...\",\"text\":\"...\"},{\"title\":\"...\",\"text\":\"...\"},{\"title\":\"...\",\"text\":\"...\"}],\"report\":{\"title\":\"...\",\"intro\":\"...\",\"question\":\"...\",\"background\":\"...\",\"method\":\"...\"}}`;
-  const prompt = `너는 학생의 막연한 아이디어를 다각도로 확장하는 사고 확장 전문가다. 주제는 "${topic}", 탐구 방향은 "${direction}"이다. 다음 10가지 사고 형식으로 주제를 분석하라: ${forms.join(", ")}. 각 관점별로 학생이 실제로 조사·관찰·비교할 수 있는 서로 다른 구체적 사례를 하나씩 제안하라. 사례는 관점 라벨, 짧고 매력적인 사례 제목(caseTitle), 주제와 관점이 만나는 이유를 설명하는 connection 2~3문장, 탐구 질문(question)으로 구성한다. 서로 다른 관점의 사례는 같은 대상을 반복하지 말고 서로 다른 맥락·자료·장면을 보여야 한다. 사실 여부가 불확실한 고유명사나 수치를 꾸며내지 말고, 학생 수준에서 검증 가능한 실제 현상·자료·문제 상황을 선택하라. 이후 선택 가능한 탐구 방향 3개, 청사진, 심화 질문 3개, 보고서 개요도 작성하라. 결론을 단정하지 말며 JSON만 반환하라. 형식: ${schema}`;
+  const prompt = `너는 학생의 탐구 주제를 실제 연구 상황으로 바꾸는 수석 탐구 설계 컨설턴트다.
+
+입력 주제: "${topic}"
+탐구 방향: "${direction}"
+사고 형식: ${forms.join(", ")}
+
+반드시 10개의 카드 결과를 만든다. 각 카드는 주제와 관점을 따로 설명하지 말고, 둘을 하나의 구체적인 탐구 사례로 결합해야 한다.
+
+핵심 원칙:
+1. 주제는 사례의 대상과 맥락이다. 관점은 그 사례를 분석하는 질문 또는 판단 기준이다.
+2. "이 관점은 탐구의 출발점이다", "이 관점으로 살펴본다"처럼 관점의 일반 정의를 설명하는 문장은 절대 쓰지 않는다.
+3. 각 caseTitle은 실제로 조사·관찰·비교·계산할 수 있는 장면을 제목으로 쓴다. 단순히 "${topic}의 정의"처럼 쓰지 않는다.
+4. connection은 해당 사례에서 주제의 구체적 요소가 관점의 질문과 어떻게 맞물리는지 2~3문장으로 설명한다. 무엇을 보고, 무엇을 비교하거나 확인할지 반드시 포함한다.
+5. question은 학생이 그 사례에서 직접 답을 찾아갈 수 있는 날카로운 탐구 질문 한 문장이다.
+6. 10개 카드는 서로 다른 대상·조건·자료·현장·문제 맥락을 보여야 한다. 같은 문구나 사례의 반복은 금지한다.
+7. 사실 여부가 불확실한 고유명사·수치·연구 결과를 꾸며내지 않는다. 학생이 공개 자료·교과 개념·관찰·계산으로 확인할 수 있는 상황만 제시한다.
+
+예시 원리: 주제가 "MOF를 활용한 약물 전달"이고 관점이 구조와 기능이라면, MOF의 기공 크기·표면 작용기·약물 저장과 방출 조건이 연결된 사례를 제시하고, 어떤 조건을 알아야 전달을 정확히 이해했다고 말할 수 있는지 질문해야 한다. 관점의 사전적 정의를 설명해서는 안 된다.
+
+선택 가능한 탐구 방향 3개, 청사진, 심화 질문 3개, 보고서 개요도 함께 작성한다. 결론을 단정하지 말고 JSON만 반환하라. 형식: ${schema}`;
   const requestBody = { contents: [{ role: "user", parts: [{ text: prompt }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.65 } };
   const call = (modelName: string, withSearch = true) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(withSearch ? requestBody : { ...requestBody, tools: undefined }) });
   let response = await call(model);
@@ -47,6 +66,9 @@ export async function POST(request: Request) {
   if (!text) return NextResponse.json({ error: "Gemini가 빈 응답을 반환했습니다." }, { status: 502 });
   try {
     const generated = JSON.parse(text.replace(/^```json\s*|\s*```$/g, ""));
+    const validCards = generated?.perspectives?.filter((card: { key?: string; caseTitle?: string; connection?: string; question?: string }) => keys.includes(card.key || "") && Boolean(card.caseTitle?.trim()) && Boolean(card.connection?.trim()) && Boolean(card.question?.trim()));
+    if (!Array.isArray(validCards) || validCards.length !== 10) throw new Error("incomplete perspective cards");
+    generated.perspectives = validCards;
     const [articles, books] = await Promise.all([crossref(topic, "journal-article", "논문·학술지"), crossref(topic, "book", "전공 서적")]);
     return NextResponse.json({ ...generated, sources: uniqueSources([...articles, ...books, ...groundingSources(result?.candidates?.[0]?.groundingMetadata)]) });
   } catch { return NextResponse.json({ error: "Gemini 응답을 JSON으로 해석하지 못했습니다." }, { status: 502 }); }
