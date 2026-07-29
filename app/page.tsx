@@ -1,123 +1,113 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
 
 type Direction = "science" | "humanities";
-type Lens = { name: string; label: string; description: string; question: string };
+type Lens = { key: string; name: string; label: string; question: string; description: string };
 type Path = { title: string; focus: string; question: string; detail: string };
-type Generated = { perspectives?: Array<{ key: string; question: string; description: string; example: string }> };
+type Plan = { basic: { what: string; how: string; discover: string }; deepening: Array<{ title: string; text: string; detail: string }> };
+type Source = { title: string; url: string; type: string; publisher?: string };
+type Generated = { perspectives?: Array<{ key: string; question: string; description: string; example: string }>; sources?: Source[] };
 
 const lenses: Lens[] = [
-  { name: "정의", label: "본질을 명확히 하기", description: "대상의 본질을 명확히 하고, 무엇을 무엇으로 쪼개거나 합치는지 살펴봅니다. 부분분수라면 ‘일반항’과 ‘분해’가 정확히 무엇을 뜻하는지부터 다시 세우며 공식의 구조를 발견합니다.", question: "이 주제에서 무엇을 무엇으로 쪼개거나 합친다는 것은 정확히 무슨 뜻일까?" },
-  { name: "범위", label: "어디까지 유효한가", description: "개념이나 공식이 어디까지 유효하게 작동하고, 어디서부터 무너지는지 추적합니다. 항의 개수·분모의 형태·수렴 여부를 바꾸어 보며 일반화 공식의 경계선을 직접 찾아볼 수 있습니다.", question: "이 개념이나 공식은 어떤 범위까지 성립하고 어디서부터 달라질까?" },
-  { name: "유사성", label: "닮은 구조 겹쳐 보기", description: "다른 분야나 개념과 뼈대가 어떻게 같은지 겹쳐 봅니다. 부분분수의 분해 구조를 수열의 점화식, 망원급수, 다항식 나눗셈과 비교하면 서로 다른 풀이가 사실 같은 원리를 공유하는지 확인할 수 있습니다.", question: "이 주제와 뼈대가 닮은 다른 개념이나 구조는 무엇일까?" },
-  { name: "위계", label: "근본과 파생 나누기", description: "무엇이 더 근본적인 토대이고 무엇이 그 위에서 파생된 결과인지 층을 나눕니다. 인수분해와 부분분수 분해, 일반항과 급수의 합처럼 개념의 순서를 세우면 공식이 만들어지는 논리의 계단이 보입니다.", question: "이 결과를 만들기 위해 먼저 성립해야 하는 근본 원리는 무엇일까?" },
-  { name: "변수", label: "결정 요인 추적하기", description: "결과를 결정짓는 핵심 요인들이 서로 어떻게 얽히는지 살펴봅니다. 분모의 차수·인수의 간격·항의 개수·계수의 값이 일반항과 합의 형태를 어떻게 바꾸는지 표로 비교해 볼 수 있습니다.", question: "결과를 결정하는 핵심 변수들은 무엇이며 서로 어떻게 영향을 줄까?" },
-  { name: "조건", label: "성립의 전제 찾기", description: "현상이나 공식이 성립하기 위해 반드시 필요한 전제를 묻습니다. 서로 다른 인수, 0이 아닌 분모, 수렴 조건 같은 가정을 하나씩 확인하며 ‘왜 이 조건이 필요한가’까지 증명하는 탐구입니다.", question: "이 공식이 성립하기 위해 반드시 필요한 전제는 무엇일까?" },
-  { name: "수단", label: "도구와 경로 분석하기", description: "결론에 도달하기 위해 어떤 도구와 경로를 사용할지 분석합니다. 계수 비교·부분합의 망원 구조·수학적 귀납법·그래프 시각화를 함께 사용해 가장 설득력 있는 증명 경로를 설계합니다.", question: "이 결론에 도달하려면 어떤 도구와 경로를 사용해야 할까?" },
-  { name: "예외", label: "규칙이 깨지는 순간", description: "일반 규칙이 깨지는 특이점이나 한계 상황을 찾아봅니다. 중복 인수, 복소수 인수, 발산하는 급수처럼 익숙한 풀이가 작동하지 않는 순간을 만났을 때 새로운 분해 방식이 필요한 이유를 밝혀냅니다.", question: "일반적인 규칙이 깨지는 특이점이나 한계 상황은 무엇일까?" },
-  { name: "사례", label: "문제 속 구체화하기", description: "추상적인 개념이 실제 문제에서 어떤 모습으로 나타나는지 확인합니다. 조화급수·확률 모형·알고리즘의 시간 복잡도 같은 구체적인 사례에 공식을 적용하며, 기호가 실제 현상을 설명하는 언어가 되는 순간을 경험합니다.", question: "이 추상적 개념은 실제 문제에서 어떤 구체적인 모습으로 나타날까?" },
-  { name: "모형", label: "시각적 틀로 그리기", description: "복잡한 수식이나 현상을 기하학적·시각적·단순화된 틀로 그려봅니다. 수직선의 항 배치, 막대그래프, 흐름도, 영역의 넓이로 부분분수와 급수의 관계를 표현하면 식의 움직임을 눈으로 설명할 수 있습니다.", question: "이 복잡한 수식이나 현상을 어떤 시각적 모형으로 표현할 수 있을까?" },
+  { key: "definition", name: "정의", label: "개념의 뼈대 세우기", question: "이 주제에서 정확히 무엇을 무엇으로 부르고, 어떤 단위로 나누어 볼 것인가?", description: "핵심 용어를 다시 정의하며 탐구의 출발선을 단단하게 세웁니다." },
+  { key: "scope", name: "범위", label: "유효한 경계 찾기", question: "이 현상이나 공식은 어디까지 유효하고, 어느 순간부터 달라지는가?", description: "성립과 붕괴 사이의 경계선을 직접 시험하는 관점입니다." },
+  { key: "similarity", name: "유사성", label: "닮은 구조 겹쳐 보기", question: "다른 개념이나 분야에서 이 주제와 닮은 구조는 무엇인가?", description: "멀리 떨어진 개념 사이에서 공통된 뼈대를 발견합니다." },
+  { key: "hierarchy", name: "위계", label: "근본과 파생 나누기", question: "무엇이 토대가 되고, 무엇이 그 위에서 파생되는가?", description: "개념이 쌓이는 순서를 따라 논리의 계단을 살핍니다." },
+  { key: "variable", name: "변수", label: "결정 요인 추적하기", question: "결과를 바꾸는 핵심 요인은 무엇이며 어떻게 얽히는가?", description: "조건을 바꿔 보며 변화의 원인을 비교합니다." },
+  { key: "condition", name: "조건", label: "성립의 전제 찾기", question: "이 현상이나 공식이 성립하기 위한 필수 전제는 무엇인가?", description: "당연해 보이는 가정 하나하나를 검증합니다." },
+  { key: "method", name: "수단", label: "도구와 경로 설계하기", question: "이 결론에 닿기 위해 어떤 자료와 도구를 어떻게 사용할 것인가?", description: "탐구의 방법 자체를 하나의 연구 대상으로 삼습니다." },
+  { key: "exception", name: "예외", label: "균열과 반례 찾기", question: "일반적인 설명이 깨지거나 비껴 가는 사례는 무엇인가?", description: "예외에서 새로운 질문과 더 정확한 설명을 만납니다." },
+  { key: "case", name: "사례", label: "현실의 장면으로 옮기기", question: "추상적인 개념은 실제 사례에서 어떤 모습으로 드러나는가?", description: "기호와 이론을 구체적인 문제의 장면으로 가져옵니다." },
+  { key: "model", name: "모형", label: "그림과 구조로 번역하기", question: "복잡한 구조를 어떤 그림·도식·모형으로 설명할 수 있는가?", description: "눈에 보이지 않던 관계를 한눈에 드러냅니다." },
 ];
 
-const defaultPaths = (topic: string, lens: Lens): Path[] => [
-  { title: "공식의 내부 경계를 끝까지 밀어보기", focus: "성립 조건과 균열을 추적하는 길", question: `${topic}의 일반화 공식은 어떤 분모의 형태, 인수의 조건, 항의 개수까지 유지되며 정확히 어느 순간부터 무너지는가?`, detail: `가장 단순한 식에서 출발해 분모의 차수·인수의 간격·중복 인수 여부를 한 가지씩 바꾸며 표본을 쌓아 가는 길입니다. 직접 부분분수 분해와 부분합 계산을 반복해 ‘성립/실패’ 지도를 만들고, 귀납적으로 보인 규칙을 대수적으로 증명해 봅니다. 익숙한 공식이 더 이상 작동하지 않는 균열을 마주하면, 그 예외가 단순한 오류가 아니라 공식의 정확한 경계선임을 발견하게 됩니다.` },
-  { title: "변형된 세계로 공식을 확장해 보기", focus: "새로운 대상과 변형에 도전하는 길", question: `기존 공식의 뼈대를 유지한 채 중복 인수, 이차식 인수, 계수가 달라진 수열까지 확장하려면 무엇을 새로 설계해야 하는가?`, detail: `서로 다른 인수를 가진 표준형에서 출발해 중복 인수·복소수 인수·분모 간격의 변형으로 차례로 영역을 넓혀 가는 길입니다. 각 변형마다 계수 비교와 수학적 귀납법, 계산 도구를 병행하여 새로운 일반항 후보를 만들고 반례로 시험합니다. 공식이 자연스럽게 확장되는 장면과 갑자기 새로운 항이 요구되는 장면을 비교하면서, ‘일반화’가 단순한 기호 늘리기가 아니라 구조를 다시 발명하는 일임을 느끼게 됩니다.` },
-  { title: "식의 움직임을 모형으로 번역하기", focus: "시각적·구조적 모형으로 전환하는 길", question: `부분분수의 분해와 급수의 상쇄를 그림·도식·그래프의 언어로 옮기면 공식의 유효 범위는 어떻게 보이는가?`, detail: `수직선 위의 항 배치, 막대의 상쇄, 분모 인수의 연결 그래프처럼 식의 구조를 눈으로 번역하는 길입니다. 여러 분해 사례를 같은 도식으로 그려 보고, 어디까지는 상쇄 패턴이 반복되며 어디서 도식이 끊기는지 관찰합니다. 계산 결과만으로는 놓치기 쉬운 대칭과 단절을 한눈에 마주하며, 공식의 범위를 설명하는 자신만의 수학적 모형을 만들게 됩니다.` },
+const fallbackPaths = (topic: string, lens: Lens): Path[] => [
+  { title: "성립의 경계선을 끝까지 밀어보기", focus: "내부 조건과 한계를 시험하는 길", question: `${topic}은(는) 어떤 조건까지 유지되며, 정확히 어느 지점에서 설명력이 흔들리는가?`, detail: `가장 단순한 사례에서 출발해 조건을 하나씩 바꾸며 성립과 실패의 지도를 만드는 길입니다. 표·계산·관찰 기록을 쌓고, 반복되는 패턴을 증명이나 근거 자료로 다시 확인합니다. 익숙한 설명이 무너지는 장면과 마주하면 그 균열이 이 탐구의 가장 중요한 발견이 됩니다.` },
+  { title: "변형된 세계로 확장해 보기", focus: "새 대상과 변형에 도전하는 길", question: `기존의 구조를 유지한 채 대상·환경·조건을 바꾸면 ${topic}은(는) 어떻게 새롭게 설명될 수 있는가?`, detail: `기준 사례를 하나 세운 뒤, 다른 조건과 사례에 차례로 적용하며 확장의 가능성을 밀어보는 길입니다. 같은 분석 틀로 자료를 비교하고, 새 변수가 들어올 때 무엇을 보완해야 하는지 추적합니다. 자연스럽게 이어지는 확장과 갑자기 막히는 지점을 비교하며 일반화의 진짜 의미를 발견하게 됩니다.` },
+  { title: "구조를 눈으로 번역해 보기", focus: "시각적·기하학적 모형으로 전환하는 길", question: `${topic}의 핵심 관계를 그림·도식·그래프·간단한 모형으로 바꾸면 무엇이 새롭게 보이는가?`, detail: `텍스트와 계산으로만 보던 관계를 흐름도·표·그래프·개념도로 옮겨 보는 길입니다. 여러 사례를 같은 모형 위에 놓고 반복되는 부분과 끊기는 부분을 관찰합니다. 계산만으로는 놓치기 쉬운 대칭과 단절을 마주하며, 자신만의 설명 모형을 설계하게 됩니다.` },
 ];
 
-function makeBlueprint(topic: string, lens: Lens, path: Path) {
-  return { what: path.question, how: `${topic}에 관한 선행 자료를 먼저 읽고, ${path.focus}에 맞는 비교 기준을 세운 뒤 사례·관찰·간단한 설문으로 근거를 모읍니다.`, discover: `${lens.name}의 관점으로 자료를 배열하면 예상과 다른 조건이나 예외가 드러날 수 있습니다. 자료의 한계와 해석의 범위도 함께 기록합니다.` };
+function fallbackPlan(topic: string, lens: Lens, path: Path): Plan {
+  return {
+    basic: { what: path.question, how: `${topic} 관련 선행 자료와 사례를 먼저 모은 뒤, ${path.focus}에 맞는 비교 기준을 세웁니다. 같은 형식의 표·도식·기록지에 근거를 정리하며 관찰과 해석을 구분합니다.`, discover: `${lens.name} 관점으로 자료를 배열하면 예상과 다른 조건, 예외, 자료의 빈자리가 드러날 수 있습니다. 그 장면을 다음 탐구 질문으로 남겨 둡니다.` },
+    deepening: [
+      { title: "경계를 흔드는 변수", text: `${topic}의 결과를 가장 크게 바꾸는 한 가지 요인은 무엇이며, 그 요인을 통제할 수 있을까?`, detail: "한 변수만 바꾼 비교 사례를 모아 변화를 추적합니다. 그 과정에서 원인처럼 보였던 것이 사실은 다른 조건과 얽혀 있었음을 발견할 수 있습니다." },
+      { title: "반례가 들려주는 이야기", text: "기존 설명이 들어맞지 않는 사례는 무엇이며, 그 사례는 무엇을 새로 요구하는가?", detail: "반례를 오류로 밀어내지 않고 자료의 중심으로 가져옵니다. 설명이 비껴 가는 지점에서 더 섬세한 조건과 새로운 가설을 만납니다." },
+      { title: "다른 세계에서의 재검증", text: "다른 사례·집단·환경에서도 같은 탐구 틀이 유지되는가?", detail: "처음 사례와 성격이 다른 대상을 골라 같은 기준으로 다시 살펴봅니다. 탐구의 범위가 넓어지는 순간과 더 이상 적용할 수 없는 장면을 함께 기록합니다." },
+    ],
+  };
 }
-
-function StepHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <div className="step-header"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>; }
 
 export default function Home() {
   const [step, setStep] = useState(1);
-  const [inputPhase, setInputPhase] = useState<"topic" | "direction">("topic");
+  const [phase, setPhase] = useState<"topic" | "direction">("topic");
   const [topic, setTopic] = useState("");
   const [direction, setDirection] = useState<Direction | null>(null);
   const [lensIndex, setLensIndex] = useState(0);
   const [pathIndex, setPathIndex] = useState(0);
   const [deepIndex, setDeepIndex] = useState(0);
   const [generated, setGenerated] = useState<Generated | null>(null);
-  const [expandedPaths, setExpandedPaths] = useState<Path[] | null>(null);
-  const [expanding, setExpanding] = useState(false);
-  const [saveNotice, setSaveNotice] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [paths, setPaths] = useState<Path[] | null>(null);
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState("");
   const lens = lenses[lensIndex];
-  const paths = useMemo(() => expandedPaths || defaultPaths(topic || "관심 주제", lens), [expandedPaths, topic, lens]);
-  const path = paths[pathIndex];
-  const blueprint = makeBlueprint(topic || "관심 주제", lens, path);
-  const deepQuestions = [
-    `${topic || "이 주제"}의 결과를 바꾸는 가장 중요한 조건은 무엇일까?`,
-    `서로 다른 사례에서도 ${lens.name}의 설명이 같은 방식으로 적용될까?`,
-    `현재 자료로 설명되지 않는 예외를 만난다면 어떤 가설을 세울 수 있을까?`,
-  ];
+  const activePaths = useMemo(() => paths || fallbackPaths(topic || "관심 주제", lens), [paths, topic, lens]);
+  const path = activePaths[pathIndex];
+  const activePlan = plan || fallbackPlan(topic || "관심 주제", lens, path);
+  const deep = activePlan.deepening[deepIndex];
   const reportTitle = `${topic || "탐구 주제"} — ${lens.name} 관점에서 ${path.title}`;
-  const reportText = createReportText({ title: reportTitle, topic, direction, lens, path, blueprint, deepQuestion: deepQuestions[deepIndex] });
 
-  async function startDirection() {
-    if (!topic.trim()) { setMessage("먼저 탐구하고 싶은 주제나 키워드를 입력해 주세요."); return; }
-    setMessage(""); setInputPhase("direction");
-  }
-  async function chooseDirection() {
-    if (!direction) { setMessage("탐구의 방향을 하나 선택해 주세요."); return; }
-    setAiLoading(true); setMessage("");
+  async function generatePerspectives() {
+    if (!topic.trim()) { setNotice("먼저 파고들고 싶은 주제나 키워드를 입력해 주세요."); return; }
+    if (!direction) { setNotice("탐구 방향을 하나 골라 주세요."); return; }
+    setLoading(true); setNotice("");
     try {
-      const response = await fetch("/api/inquiry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: topic.trim(), direction }) });
-      if (!response.ok) throw new Error("AI 응답을 받지 못했습니다.");
-      const data = await response.json() as Generated;
-      setGenerated(data);
-    } catch { setMessage("AI 연결이 없어도 탐구를 계속할 수 있도록 기본 질문을 준비했습니다."); }
-    setAiLoading(false); setStep(2);
+      const response = await fetch("/api/inquiry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic, direction }) });
+      if (!response.ok) throw new Error();
+      setGenerated(await response.json());
+    } catch { setNotice("Gemini 응답을 받지 못해 기본 관점 안내를 보여 드립니다."); }
+    setLoading(false); setStep(2);
   }
-  async function expandLens() {
-    if (expanding) return;
-    setExpanding(true); setMessage("");
+  async function generatePaths() {
+    setLoading(true); setNotice("");
     try {
-      const response = await fetch("/api/inquiry/expand", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: topic.trim(), direction, perspective: { name: lens.name, question: lens.question, description: lens.description } }) });
+      const response = await fetch("/api/inquiry/expand", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic, direction, perspective: lens }) });
       const data = await response.json();
       if (!response.ok || !Array.isArray(data.approaches)) throw new Error();
-      setExpandedPaths(data.approaches);
-    } catch { setExpandedPaths(null); setMessage("AI 연결이 없어도 세 갈래의 기본 탐구 길을 확인할 수 있습니다."); }
-    setPathIndex(0); setExpanding(false); setStep(3);
+      setPaths(data.approaches); setPathIndex(0);
+    } catch { setPaths(null); setNotice("Gemini 응답을 받지 못해 기본 세 갈래를 보여 드립니다."); }
+    setLoading(false); setStep(3);
   }
-  function saveReport() {
-    const savedAt = new Date().toLocaleString("ko-KR");
-    localStorage.setItem("inquiry-studio-report", JSON.stringify({ title: reportTitle, content: reportText, savedAt }));
-    setSaveNotice(`이 브라우저에 ${savedAt}에 저장했습니다.`);
+  async function generatePlan() {
+    setLoading(true); setNotice("");
+    try {
+      const response = await fetch("/api/inquiry/deepen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic, direction, lens, path }) });
+      const data = await response.json();
+      if (!response.ok || !data.basic || !Array.isArray(data.deepening)) throw new Error();
+      setPlan(data); setDeepIndex(0);
+    } catch { setPlan(null); setNotice("Gemini 응답을 받지 못해 현재 선택을 바탕으로 기본 청사진을 만들었습니다."); }
+    setLoading(false); setStep(4);
   }
+  function reset() { setStep(1); setPhase("topic"); setTopic(""); setDirection(null); setLensIndex(0); setPathIndex(0); setDeepIndex(0); setGenerated(null); setPaths(null); setPlan(null); setNotice(""); }
   function downloadReport() {
-    saveReport();
-    const blob = new Blob([reportText], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${(topic || "탐구보고서").replace(/[\\/:*?"<>|]/g, "_")}_탐구보고서.md`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const text = `# ${reportTitle}\n\n- 탐구 주제: ${topic}\n- 탐구 방향: ${direction === "humanities" ? "인문·사회·예술" : "과학·기술·수리"}\n- 선택 관점: ${lens.name}\n- 선택한 길: ${path.title}\n\n## 무엇을 묻나\n${activePlan.basic.what}\n\n## 어떻게 알아보나\n${activePlan.basic.how}\n\n## 무엇을 만나게 되나\n${activePlan.basic.discover}\n\n## 심화 질문\n${deep.title}\n${deep.text}\n${deep.detail}\n`;
+    localStorage.setItem("inquiry-studio-report", text);
+    const url = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = `${(topic || "탐구보고서").replace(/[\\/:*?"<>|]/g, "_")}_탐구보고서.md`; link.click(); URL.revokeObjectURL(url);
   }
 
-  function reset() { setStep(1); setInputPhase("topic"); setTopic(""); setDirection(null); setLensIndex(0); setPathIndex(0); setDeepIndex(0); setGenerated(null); setExpandedPaths(null); setMessage(""); }
-  function nextStep() { setStep((current) => Math.min(5, current + 1)); }
-  function previousStep() { setStep((current) => Math.max(1, current - 1)); }
-
-  return <main className="app-shell"><header className="topbar"><div className="brand-mark">탐</div><div><strong>탐구 주제 설계실</strong><small>Inquiry Studio</small></div><div className="topbar-spacer" /><span className="student-chip">나의 탐구 여정</span><button className="ghost-button" onClick={reset}>처음으로</button></header><div className="progress"><span className="progress-label">탐구 여정</span>{["주제와 방향", "관점 선택", "탐구의 길", "청사진", "보고서 목차"].map((label, index) => <div className={`progress-item ${step === index + 1 ? "active" : ""} ${step > index + 1 ? "done" : ""}`} key={label}><b>{index + 1}</b><span>{label}</span></div>)}</div><section className="workspace">
-    {step === 1 && <section className="welcome"><StepHeader eyebrow="STEP 1 · 시작하기" title={inputPhase === "topic" ? "어떤 주제를 깊이 파고들고 싶나요?" : "이 주제를 어떤 방향으로 풀어볼까요?"} description={inputPhase === "topic" ? "막연한 키워드라도 좋습니다. 질문으로 자라날 씨앗을 적어 주세요." : `‘${topic}’을(를) 어떤 렌즈로 탐구할지 선택해 주세요. 선택에 따라 이후 질문과 자료 탐색의 결이 달라집니다.`} />{inputPhase === "topic" ? <><label className="field-label">관심 주제 또는 개념<textarea value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="예: 기후 변화, 인공지능의 편향, 학교 일회용품 사용" rows={5} autoFocus /></label><button className="primary-button" onClick={startDirection}>다음 · 방향 고르기 <span>→</span></button></> : <><div className="topic-confirm">입력한 주제<strong>{topic}</strong></div><div className="direction-grid"><button className={direction === "science" ? "direction-card selected" : "direction-card"} onClick={() => setDirection("science")}><span>01</span><strong>과학 · 기술 · 수리</strong><p>실험, 관찰, 측정, 증명을 중심으로 현상을 확인합니다.</p><em>“무엇이 어떻게 달라지는지 직접 확인해 볼까?”</em></button><button className={direction === "humanities" ? "direction-card selected" : "direction-card"} onClick={() => setDirection("humanities")}><span>02</span><strong>인문 · 사회 · 예술</strong><p>해석, 맥락, 사람들의 경험과 서술을 중심으로 살펴봅니다.</p><em>“이 현상은 어떤 맥락에서 다르게 읽힐까?”</em></button></div><div className="inline-actions"><button className="secondary-button" onClick={() => setInputPhase("topic")}>← 주제 수정</button><button className="primary-button compact" onClick={chooseDirection} disabled={aiLoading}>{aiLoading ? "질문을 준비하는 중…" : "방향 선택 완료 →"}</button></div></>}{message && <p className="notice">{message}</p>}<div className="first-step-note"><span>TIP</span><p>정답을 고르는 과정이 아닙니다. 지금 가장 궁금하고 오래 들여다보고 싶은 방향을 골라 보세요.</p></div></section>}
-    {step === 2 && <section><StepHeader eyebrow="STEP 2 · 사고 형식" title="이 주제를 어떤 관점으로 바라볼까요?" description="같은 주제도 어떤 질문을 던지느냐에 따라 전혀 다른 탐구가 됩니다. 10가지 렌즈 중 가장 끌리는 관점 하나를 골라 보세요." /><div className="lens-grid">{lenses.map((item, index) => { const aiLens = generated?.perspectives?.find((value) => value.key === ["definition", "scope", "similarity", "hierarchy", "variable", "condition", "method", "exception", "case", "model"][index]); return <button className={`lens-card ${lensIndex === index ? "selected" : ""}`} onClick={() => setLensIndex(index)} key={item.name}><span>관점 {index + 1}</span><strong>[{item.name}] {aiLens?.question || item.question}</strong><p>{aiLens?.description || item.description}</p><em>{aiLens?.example ? `탐구 방향 예시 · ${aiLens.example}` : `${item.name} 관점으로 ${topic || "이 주제"}의 새로운 구조를 발견해 보세요.`}</em></button>; })}</div><StepActions onBack={previousStep} onNext={expandLens} next={expanding ? "세 갈래의 길을 설계하는 중…" : "이 관점으로 확장하기 →"} disabled={expanding} /></section>}
-    {step === 3 && <section><StepHeader eyebrow="STEP 3 · 세 갈래의 탐구 길" title={`${lens.name} 관점으로 어느 결을 따라갈까요?`} description={`선택한 ‘${lens.name}’ 관점을 ${topic}에 적용한 세 갈래의 길입니다. 난이도가 아니라 무엇을 돋보기로 확대할지에 따라 결이 달라집니다.`} /><div className="selected-summary"><span>선택한 관점</span><strong>{lens.name} · {lens.label}</strong><p>{lens.question}</p></div><div className="path-grid">{paths.map((item, index) => <button className={`path-card-new ${pathIndex === index ? "selected" : ""}`} onClick={() => setPathIndex(index)} key={item.title}><span className="path-index">0{index + 1}</span><strong>{item.title}</strong><h3>핵심 질문</h3><p>{item.question}</p><h3>파고드는 결 · {item.focus}</h3><em>{item.detail}</em></button>)}</div>{message && <p className="notice">{message}</p>}<StepActions onBack={previousStep} onNext={nextStep} next="이 길로 설계하기 →" /></section>}
-    {step === 4 && <section><StepHeader eyebrow="STEP 4 · 탐구 청사진" title="이 길을 실제 탐구로 바꿔 볼까요?" description="무엇을 묻고, 어떻게 알아보고, 무엇을 만나게 될지 한 장의 청사진으로 정리했습니다." /><div className="blueprint-grid"><article><span>무엇을 묻나</span><h2>{blueprint.what}</h2><p>선택한 길의 중심에 놓인 핵심 질문입니다.</p></article><article><span>어떻게 알아보나</span><h2>{blueprint.how}</h2><p>자료 조사와 관찰·비교 절차를 구체화해 보세요.</p></article><article><span>무엇을 만나게 되나</span><h2>{blueprint.discover}</h2><p>예상되는 발견뿐 아니라 자료의 한계도 기록합니다.</p></article></div><div className="deep-section"><span className="section-label">한 층 더 깊이 들어가기</span><h2>어떤 심화 질문이 가장 마음에 남나요?</h2><div className="deep-grid">{deepQuestions.map((question, index) => <button className={deepIndex === index ? "selected" : ""} onClick={() => setDeepIndex(index)} key={question}><b>0{index + 1}</b><span>{question}</span></button>)}</div></div><StepActions onBack={previousStep} onNext={nextStep} next="목차 만들기 →" /></section>}
-    {step === 5 && <section><StepHeader eyebrow="STEP 5 · 탐구 보고서" title="탐구 보고서의 뼈대가 완성됐어요" description="지금까지 선택한 흐름을 실제 보고서에 옮길 수 있도록 I. 서론 · II. 본론 · III. 결론 구조로 정리했습니다." /><div className="report-title"><span>보고서 제목 제안</span><h2>{reportTitle}</h2></div><ReportSection title="I. 서론" items={[["1.1", "탐구 동기와 배경", `${topic}에 관심을 갖게 된 계기와 일상에서 발견한 문제 상황을 구체적으로 씁니다.`], ["1.2", "탐구 질문과 목적", `${blueprint.what}을 중심 질문으로 제시하고, ${lens.name} 관점과 선택한 탐구 방향을 설명합니다.`], ["1.3", "탐구 범위와 순서", "조사 대상·기간·자료의 범위를 정하고 어떤 순서로 답을 찾아갈지 안내합니다."]]} /><ReportSection title="II. 본론" items={[["2.1", "개념과 선행 자료", `${topic}의 주요 개념을 정의하고 논문·학술지·전공 서적·뉴스 자료를 비교해 정리합니다.`], ["2.2", "탐구 방법과 분석", blueprint.how], ["2.3", "심화 질문 분석", `${deepQuestions[deepIndex]}에 답하기 위해 수집한 사례와 근거를 표·도식·문단으로 분석합니다.`]]} /><ReportSection title="III. 결론" items={[["3.1", "발견과 해석", "자료에서 확인한 패턴을 요약하되, 자료가 보여 주는 범위 안에서 신중하게 해석합니다."], ["3.2", "한계와 후속 질문", `${blueprint.discover}를 바탕으로 이번 탐구에서 남은 한계와 다음 탐구 질문을 씁니다.`]]} /><div className="final-actions"><button className="secondary-button" onClick={previousStep}>← 청사진으로 돌아가기</button><button className="secondary-button" onClick={saveReport}>브라우저에 저장</button><button className="primary-button compact" onClick={downloadReport}>텍스트 파일 저장</button><button className="primary-button compact" onClick={() => window.print()}>인쇄 / PDF 저장</button></div>{saveNotice && <p className="save-notice">{saveNotice}</p>}</section>}
-  </section><footer><span>탐구는 답을 받는 일이 아니라, 더 좋은 질문을 만드는 일입니다.</span><button onClick={reset}>새 탐구 시작</button></footer></main>;
+  return <main className="inquiry-page"><header className="page-nav"><button onClick={reset}>← 처음</button><span>학생 탐구</span><strong>탐구 주제 잡기</strong></header>{step > 1 && <div className="context-chips"><span>주제&nbsp; {topic}</span><i>→</i><b>결&nbsp; {direction === "humanities" ? "인문·사회·예술" : "과학·기술·수리"}</b><i>→</i><b>관점&nbsp; {lens.name}</b></div>}<section className={`stage stage-${step}`}>
+    {step === 1 && <div className="start-stage"><Header eyebrow="시작" title={phase === "topic" ? "무엇을 파고들고 싶나요?" : "어떤 결로 탐구를 시작할까요?"} description={phase === "topic" ? "막연해도 됩니다. ‘기후위기’, ‘조선 신분제’, ‘호스가 신기하다’ 정도면 충분해요." : `‘${topic}’을 어떤 방식으로 탐구할지 골라 주세요.`} />{phase === "topic" ? <><textarea className="topic-input" rows={4} value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="예: MOF, 인체 약물 전달 / 수열과 급수를 활용한 부분분수 일반화" /><button className="next" onClick={() => topic.trim() ? setPhase("direction") : setNotice("주제를 입력해 주세요.")}>다음 →</button></> : <><div className="direction-choice"><button className={direction === "science" ? "picked" : ""} onClick={() => setDirection("science")}><small>과학·기술·수리</small><strong>관찰하고, 비교하고, 증명하기</strong><p>실험·계산·자료 분석으로 현상의 구조를 확인합니다.</p></button><button className={direction === "humanities" ? "picked" : ""} onClick={() => setDirection("humanities")}><small>인문·사회·예술</small><strong>해석하고, 맥락을 읽고, 서술하기</strong><p>사람·사회·문화의 의미와 관계를 깊이 살핍니다.</p></button></div><div className="actions"><button onClick={() => setPhase("topic")}>← 주제 수정</button><button className="next" disabled={loading} onClick={generatePerspectives}>{loading ? "Gemini가 관점을 준비하는 중…" : "관점 만나기 →"}</button></div></>}{notice && <p className="notice">{notice}</p>}</div>}
+    {step === 2 && <div><Header eyebrow="관점 — 10가지 사고 형식" title="이 주제를 어떤 관점으로 파고들래요?" description="같은 주제도 어떤 관점으로 보느냐에 따라 다른 탐구가 열립니다. 마음이 끌리는 관점 하나를 골라 보세요." /><div className="lens-cards">{lenses.map((item, index) => { const ai = generated?.perspectives?.find((value) => value.key === item.key); return <button key={item.key} onClick={() => setLensIndex(index)} className={lensIndex === index ? "selected" : ""}><small>관점 · {item.name}</small><h3>{ai?.question || item.question}</h3><p>{ai?.description || item.description}</p><em>{ai?.example || `‘${topic}’을(를) ${item.name}의 렌즈로 새롭게 살펴보는 탐구입니다.`}</em></button>; })}</div><FooterActions back={() => setStep(1)} next={generatePaths} nextLabel={loading ? "세 갈래를 설계하는 중…" : "다음 →"} disabled={loading} /></div>}
+    {step === 3 && <div><Header eyebrow="세 길 — 파고드는 결" title="이 관점 안에서 어디를 파볼래요?" description="같은 관점이라도 파고들 길이 셋 있습니다. 난이도가 아니라 파고드는 결로 갈립니다. 가슴 뛰는 한 길을 고르세요." /><div className="chosen-lens"><small>선택한 관점 · {lens.name}</small><strong>{lens.question}</strong></div><div className="path-list">{activePaths.map((item, index) => <button key={item.title} onClick={() => setPathIndex(index)} className={pathIndex === index ? "selected" : ""}><b>{index + 1}</b><div><h3>{item.title}</h3><strong>{item.question}</strong><p>{item.detail}</p></div></button>)}</div><FooterActions back={() => setStep(2)} next={generatePlan} nextLabel={loading ? "탐구 청사진을 만드는 중…" : "다음 →"} disabled={loading} /></div>}
+    {step === 4 && <div><Header eyebrow="기본 탐구" title="이 길의 탐구를 한 번에" description="고른 길의 탐구가 어떻게 펼쳐지는지 한 번에 보여 드립니다." /><div className="blueprint"><article><small>무엇을 묻나</small><h2>{activePlan.basic.what}</h2></article><article><small>어떻게 알아보나</small><p>{activePlan.basic.how}</p></article><article><small>무엇을 만나게 되나</small><p>{activePlan.basic.discover}</p></article></div><FooterActions back={() => setStep(3)} next={() => setStep(5)} nextLabel="한 층 더 깊이 →" /></div>}
+    {step === 5 && <div><Header eyebrow="더 깊이 — 1단" title="한 층 더 깊이" description="지금 관점 안에서 한 층 더 들어가는 세 갈래입니다." /><div className="deep-list">{activePlan.deepening.map((item, index) => <button key={item.title} onClick={() => setDeepIndex(index)} className={deepIndex === index ? "selected" : ""}><b>{index + 1}</b><div><h3>{item.title}</h3><strong>{item.text}</strong><p>{item.detail}</p></div></button>)}</div><FooterActions back={() => setStep(4)} next={() => setStep(6)} nextLabel="보고서 목차 만들기 →" /></div>}
+    {step === 6 && <div><Header eyebrow="마무리 — 탐구 보고서 목차" title="탐구 보고서의 뼈대" description="선택한 주제와 관점, 탐구의 길, 심화 질문을 보고서의 구조로 묶었습니다." /><div className="report-title"><small>보고서 제목</small><h2>{reportTitle}</h2></div><Report title="I. 서론" items={[["1.1", "탐구 동기와 배경", `${topic}에 관심을 갖게 된 계기와 문제 상황을 구체적으로 정리합니다.`], ["1.2", "탐구 질문과 목적", activePlan.basic.what]]} /><Report title="II. 본론" items={[["2.1", "이론적 배경과 자료", `${topic}와 관련된 핵심 개념, 선행 자료, 비교 기준을 정리합니다.`], ["2.2", "탐구 방법", activePlan.basic.how], ["2.3", "심화 분석", `${deep.text}을(를) 중심으로 사례와 근거를 분석합니다.`]]} /><Report title="III. 결론" items={[["3.1", "발견과 해석", activePlan.basic.discover], ["3.2", "한계와 후속 질문", "이번 탐구의 한계와 다음에 더 확인하고 싶은 질문을 씁니다."]]} /><div className="save-actions"><button onClick={() => setStep(5)}>← 이전</button><button onClick={downloadReport}>텍스트로 저장</button><button className="next" onClick={() => window.print()}>인쇄 / PDF 저장</button></div></div>}
+  </section></main>;
 }
 
-function StepActions({ onBack, onNext, next, disabled = false }: { onBack: () => void; onNext: () => void; next: string; disabled?: boolean }) { return <div className="step-actions"><button className="secondary-button" onClick={onBack}>← 이전</button><button className="primary-button compact" onClick={onNext} disabled={disabled}>{next}</button></div>; }
-
-function ReportSection({ title, items }: { title: string; items: string[][] }) { return <section className="report-section"><h2>{title}</h2>{items.map(([number, heading, body]) => <article key={number}><b>{number}</b><div><strong>{heading}</strong><p>{body}</p><small>• 핵심 개념과 근거 자료를 구체적으로 기록하기<br />• 자신의 관찰과 해석을 근거와 구분해 쓰기</small></div></article>)}</section>; }
-
-function createReportText({ title, topic, direction, lens, path, blueprint, deepQuestion }: { title: string; topic: string; direction: Direction | null; lens: Lens; path: Path; blueprint: { what: string; how: string; discover: string }; deepQuestion: string }) {
-  return `# ${title}\n\n- 탐구 주제: ${topic}\n- 탐구 방향: ${direction === "humanities" ? "인문·사회·예술" : "과학·기술·수리"}\n- 선택 관점: ${lens.name} · ${lens.label}\n- 선택한 탐구 길: ${path.title}\n\n## I. 서론\n\n### 1.1 탐구 동기와 배경\n${topic}에 관심을 갖게 된 계기와 일상에서 발견한 문제 상황을 구체적으로 씁니다.\n\n### 1.2 탐구 질문과 목적\n${blueprint.what}\n\n### 1.3 탐구 범위와 순서\n조사 대상·기간·자료의 범위를 정하고 어떤 순서로 답을 찾아갈지 안내합니다.\n\n## II. 본론\n\n### 2.1 개념과 선행 자료\n${topic}의 주요 개념을 정의하고 논문·학술지·전공 서적·뉴스 자료를 비교해 정리합니다.\n\n### 2.2 탐구 방법과 분석\n${blueprint.how}\n\n### 2.3 심화 질문 분석\n${deepQuestion}\n\n## III. 결론\n\n### 3.1 발견과 해석\n자료에서 확인한 패턴을 요약하되, 자료가 보여 주는 범위 안에서 신중하게 해석합니다.\n\n### 3.2 한계와 후속 질문\n${blueprint.discover}\n`;
-}
+function Header({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <header className="stage-header"><span>{eyebrow}</span><h1>{title}</h1><p>{description}</p></header>; }
+function FooterActions({ back, next, nextLabel, disabled = false }: { back: () => void; next: () => void; nextLabel: string; disabled?: boolean }) { return <div className="footer-actions"><button onClick={back}>← 이전</button><button onClick={next} className="next" disabled={disabled}>{nextLabel}</button></div>; }
+function Report({ title, items }: { title: string; items: string[][] }) { return <section className="report"><h2>{title}</h2>{items.map(([number, heading, text]) => <article key={number}><b>{number}</b><div><strong>{heading}</strong><p>{text}</p><small>• 넣을 내용과 근거 자료를 구체적으로 기록하기</small></div></article>)}</section>; }
