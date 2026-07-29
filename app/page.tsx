@@ -2,93 +2,49 @@
 
 import { useMemo, useState } from "react";
 
-type Perspective = { key: string; name: string; question: string; description: string; color: string };
-const perspectives: Perspective[] = [
-  { key: "definition", name: "정의", question: "부분분수로 분해한다는 것은 정확히 무엇을 하나의 무엇으로 쪼개는 뜻인가?", description: "부분분수 일반화를 시도하기 전에, 무엇을 어떤 조건과 형태로 요구하는지 안전하게 정리해 보는 관점입니다.", color: "violet" },
-  { key: "scope", name: "범위", question: "내가 만들려는 부분분수 일반화 공식은 어떤 형태의 분모까지 작동하고, 어디서부터 무너지는가?", description: "1/n, n(n+1), n(n+1)(n+2)처럼 분모가 확장될 때 어디까지 성립하는지 경계를 그려 봅니다.", color: "indigo" },
-  { key: "similarity", name: "유사성", question: "부분분수 분해의 구조는 수열의 계차·망원합·미분의 부분적분과 같은 자리에서 같은 배열로 작동하고 있지 않은가?", description: "서로 달라 보이는 개념에서 같은 패턴이 반복되는지 찾아 연결하는 관점입니다.", color: "blue" },
-  { key: "hierarchy", name: "위계", question: "부분분수 공식 안에서 무엇이 더 근본이고 무엇이 그 위에 얹혀 있는 파생 결과인가?", description: "항등식, 계수 결정, 급수합 도출이 서로 어떤 층을 이루는지 나누어 봅니다.", color: "teal" },
-  { key: "variable", name: "변수", question: "부분분수 일반화 공식의 값을 결정짓는 파라미터는 무엇이고 서로 어떻게 얽히는가?", description: "분모의 차수·간격·개수 같은 변수의 결로 결과가 어떻게 달라지는지 살펴봅니다.", color: "amber" },
-  { key: "condition", name: "조건", question: "이 일반화 공식이 성립하려면 분모의 인수들이 어떤 조건을 만족해야 하는가?", description: "서로 다른 근, 중근, 복소근 등 분모의 조건에 따라 공식 형태가 달라지는지 점검합니다.", color: "orange" },
-  { key: "method", name: "수단", question: "이 일반화 공식에 도달하기 위해 나는 어떤 도구와 경로를 쓰고 있으며, 왜 그 도구인가?", description: "공식을 유도하는 방법과 다른 우회 경로가 있는지 함께 살펴보는 관점입니다.", color: "green" },
-  { key: "exception", name: "예외", question: "내가 세운 부분분수 공식이 깨지는 자리(중근·특이점·발산 급수)는 어디인가?", description: "일반화가 어디서 예외를 만나 무너지는지 찾아 정확한 경계를 드러냅니다.", color: "rose" },
-  { key: "case", name: "사례", question: "내가 만든 일반화 공식은 실제 수열·급수 문제에서 어떤 구체적 모습으로 나타나는가?", description: "추상적 공식이 실제 계산 상황에서 어떻게 살아 움직이는지 구체적 사례로 확인합니다.", color: "cyan" },
-  { key: "model", name: "모형", question: "부분분수 분해를 어떤 기하적 그림(넓이·조개기·선분 분할·격자 위 면적)으로 단순하게 시각화할 수 있는가?", description: "학생이 함께 만든 그림과 대수식 뒤에 어떤 모형과 구조가 깔려 있는지 그려 보는 관점입니다.", color: "purple" },
-];
+type Perspective = { key: string; name: string; color: string; description: string; question: string };
+type AiContent = { perspectives: Array<{ key: string; question: string; description: string; example: string }>; paths: Array<{ title: string; text: string; detail: string }>; basic: { what: string; how: string; discover: string }; deepening: Array<{ title: string; text: string }>; report: { title: string; intro: string; question: string; background: string; method: string } };
 
-function getPerspectiveCopy(item: Perspective, topic: string) {
-  const subject = topic.trim() || "이 주제";
-  const copies: Record<string, { question: string; example: string }> = {
-    definition: { question: `${subject}를 구성하는 핵심 개념은 무엇이며, 비슷해 보이는 개념과 어떻게 구분되는가?`, example: `${subject}의 핵심 용어를 3개로 나누고, 각각의 뜻과 포함되지 않는 사례를 표로 정리해 봅니다.` },
-    scope: { question: `${subject}은 어떤 조건·대상·기간까지 설명할 수 있고, 어디서부터 설명력이 약해지는가?`, example: `${subject}의 범위를 학교·지역·시간처럼 한 가지 기준씩 넓혀 보며 설명이 달라지는 지점을 찾아봅니다.` },
-    similarity: { question: `${subject}에서 다른 현상이나 교과 개념과 같은 패턴을 찾을 수 있는가?`, example: `${subject}과 닮은 사례를 다른 과목에서 하나 찾아 공통 구조와 다른 점을 나란히 비교합니다.` },
-    hierarchy: { question: `${subject}를 이루는 원인·과정·결과 중 무엇이 더 근본이고 무엇이 그 위에 얹힌 결과인가?`, example: `${subject}의 원인에서 결과까지를 단계별 화살표로 그려 가장 먼저 확인할 층위를 정합니다.` },
-    variable: { question: `${subject}의 결과를 바꾸는 핵심 변인은 무엇이고, 변인들은 서로 어떻게 얽히는가?`, example: `${subject}에 영향을 줄 것 같은 변인 2~3개를 골라 하나씩 바꿨을 때 결과가 어떻게 달라지는지 기록합니다.` },
-    condition: { question: `${subject}의 현상이 나타나거나 성립하려면 어떤 조건들이 함께 만족되어야 하는가?`, example: `${subject}이 잘 나타난 사례와 나타나지 않은 사례를 비교해 공통으로 필요한 조건을 추려 봅니다.` },
-    method: { question: `${subject}을 알아보기 위해 어떤 자료·실험·인터뷰 방법을 쓰며, 왜 그 방법이 적절한가?`, example: `${subject}에 대해 관찰·설문·공공데이터 중 하나를 고르고, 그 방법으로 확인할 수 있는 질문을 구체화합니다.` },
-    exception: { question: `${subject}에 대한 일반적인 설명이 통하지 않는 예외 사례는 어디에서 나타나는가?`, example: `${subject}을 설명하는 통념과 반대되는 사례를 하나 찾아, 기존 설명이 놓친 조건을 추적합니다.` },
-    case: { question: `${subject}은 실제 생활이나 사회에서 어떤 구체적인 모습으로 나타나는가?`, example: `${subject}과 관련된 실제 뉴스·학교·지역 사례 하나를 선정해 추상적인 개념이 어떻게 드러나는지 분석합니다.` },
-    model: { question: `${subject}을 그림·표·흐름도·모형으로 단순하게 표현한다면 무엇을 어떻게 배치할 수 있는가?`, example: `${subject}의 요소와 관계를 한 장의 그림으로 옮긴 뒤, 모형으로 표현되지 않는 부분을 표시합니다.` },
-  };
-  return { ...item, ...(copies[item.key] || copies.definition) };
+const perspectives: Perspective[] = ["정의", "범위", "유사성", "위계", "변수", "조건", "수단", "예외", "사례", "모형"].map((name, index) => ({ key: ["definition", "scope", "similarity", "hierarchy", "variable", "condition", "method", "exception", "case", "model"][index], name, color: ["violet", "indigo", "blue", "teal", "amber", "orange", "green", "rose", "cyan", "purple"][index], description: `${name} 관점에서 주제를 새롭게 바라보고 탐구 질문으로 좁혀 갑니다.`, question: `${name} 관점에서 이 주제를 어떻게 파고들 수 있을까?` }));
+const defaultPaths = ["형태와 범위의 경계", "반복되는 패턴과 조건", "그림·표·모형으로 표현하기"].map((title) => ({ title, text: "선택한 주제를 관찰하고 비교하며 설명이 달라지는 지점을 찾아봅니다.", detail: "사례를 하나씩 바꾸고 결과를 기록하여 탐구의 경계를 확인합니다." }));
+
+function fallbackCopy(item: Perspective, topic: string) {
+  const subject = topic || "이 주제";
+  return { question: `${subject}의 ${item.name}은(는) 무엇이며, 어떤 질문으로 확인할 수 있을까?`, description: `${subject}을 ${item.name} 관점에서 관찰하고 근거를 모아 봅니다.`, example: `${subject}의 실제 사례를 하나 고르고, ${item.name} 관점에서 달라지는 점을 표로 정리합니다.` };
 }
-
-function getPathCopy(path: typeof paths[number], topic: string) {
-  const subject = topic.trim() || "이 주제";
-  const questions = [
-    `${subject}은 어떤 형태와 범위까지 설명할 수 있고, 어디서부터 설명이 무너지는가?`,
-    `${subject}을 관찰했을 때 반복되는 패턴은 어느 조건에서 유지되고 어느 지점에서 달라지는가?`,
-    `${subject}을 그림·표·모형으로 옮겼을 때 표현이 가능한 영역과 표현하기 어려운 영역은 어디인가?`,
-  ];
-  return { ...path, text: questions[paths.indexOf(path)] || path.text, detail: `${subject}을 대상으로 ${path.detail}` };
-}
-
-const paths = [
-  { title: "분모 형태의 경계", text: "내가 세운 부분분수 일반화 공식은 분모가 어떤 형태까지 버티고, 어디서부터 형태가 무너지는가?", detail: "분모의 생김새를 바꿔가며 공식이 어디까지 뻗는지 밀어보는 길입니다.", color: "green" },
-  { title: "수렴의 경계", text: "부분분수로 분해한 항을 급수로 이었을 때, 수렴하는 범위와 발산으로 넘어가는 지점은 어디인가?", detail: "공식이 '식으로서' 성립하는 범위와 무한합으로 넘어갔을 때의 유효 범위를 깨닫는 길입니다.", color: "blue" },
-  { title: "기하 모형의 사라짐", text: "부분분수를 도형·면적·길이 같은 기하 모형으로 옮겼을 때 그 모형은 언제까지 그려지고, 어디서부터 기하적 해석이 불가능해지는가?", detail: "대수 공식과 기하 표현이 나란히 가는 구간과 어긋나기 시작하는 구간을 비교합니다.", color: "purple" },
-];
 
 export default function Home() {
   const [step, setStep] = useState(1);
   const [student, setStudent] = useState({ number: "", name: "", topic: "" });
   const [selectedPerspective, setSelectedPerspective] = useState(1);
   const [selectedPath, setSelectedPath] = useState(0);
-  const [saved, setSaved] = useState(false);
+  const [ai, setAi] = useState<AiContent | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const topic = student.topic.trim() || "관심 주제";
   const selected = perspectives[selectedPerspective];
-  const topic = student.topic || "부분분수 일반화 공식의 분모 형태별 경계 탐구";
-  const report = useMemo(() => ({ title: `${topic} - 대수와 기하로 함께 밀어보기`, intro: `${topic}에 관심을 갖고, ${selected.name} 관점에서 공식이 어디까지 작동하는지 직접 확인해 본다.`, method: `먼저 가장 단순한 서로 다른 인수의 곱에서 공식을 세우고, 분모의 생김새를 한 겹씩 바꿔가며 ${selected.name} 관점의 질문을 점검한다. 각 단계에서 공식이 흔들리는 지점을 표로 정리하고, 필요한 경우 기하적 모형과 계산 결과를 함께 비교한다.` }), [topic, selected.name]);
+  const report = useMemo(() => ai?.report || { title: `${topic} 탐구 보고서`, intro: `${topic}에 관심을 갖게 된 계기와 관찰한 현상을 정리한다.`, question: `${topic}은 어떤 조건에서 달라지는가?`, background: `${topic}의 핵심 개념과 관련 사례를 조사한다.`, method: `${topic}의 사례를 관찰하고 조건을 바꾸어 결과를 비교한다.` }, [ai, topic]);
 
-  function next() { setStep((value) => Math.min(6, value + 1)); }
-  function back() { setStep((value) => Math.max(1, value - 1)); }
-  function reset() { setStep(1); setStudent({ number: "", name: "", topic: "" }); setSaved(false); }
+  async function generate() {
+    if (!student.topic.trim()) { setError("먼저 관심 주제를 입력해 주세요."); return; }
+    setLoading(true); setError("");
+    try { const response = await fetch("/api/inquiry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: student.topic }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Gemini 생성에 실패했습니다."); setAi(data); setStep(2); } catch (cause) { setError(cause instanceof Error ? cause.message : "Gemini 생성에 실패했습니다."); } finally { setLoading(false); }
+  }
+  function reset() { setStep(1); setStudent({ number: "", name: "", topic: "" }); setAi(null); setError(""); }
 
-  return <main className="inquiry-app">
-    <header className="app-header"><div className="mini-brand"><span>탐</span><div><strong>탐구 주제 찾기</strong><small>Inquiry Studio</small></div></div><div className="school-pill">고등학교 2학년 <span>⌄</span></div><button className="settings-button">⚙ Google API 설정</button></header>
-    <nav className="progress-nav"><button onClick={() => setStep(1)}>← 처음</button><span>학생 분석</span><strong>탐구 주제 찾기</strong></nav>
-    <div className="session-bar"><button>이전 세션 (2)⌄</button><button onClick={reset}>＋ 새 세션</button><button className="dark-button" onClick={() => setSaved(true)}>저장</button>{saved && <small>저장됨 · 오후 03:02</small>}</div>
-    <section className="topic-strip"><span>주제&nbsp; {topic}</span><i>›</i><b>결&nbsp; {selected.name} 관점</b></section>
-    <div className="step-content">
-      {step === 1 && <Start student={student} setStudent={setStudent} onNext={next} />}
-      {step === 2 && <PerspectiveStep topic={topic} selected={selectedPerspective} setSelected={setSelectedPerspective} onNext={next} onBack={back} />}
-      {step === 3 && <PathStep topic={topic} selected={selectedPath} setSelected={setSelectedPath} onNext={next} onBack={back} />}
-      {step === 4 && <BasicInquiry selected={selected} path={paths[selectedPath]} topic={topic} onNext={next} onBack={back} />}
-      {step === 5 && <Deepen selected={selected} onNext={next} onBack={back} />}
-      {step === 6 && <Report report={report} onReset={reset} />}
-    </div>
-  </main>;
+  return <main className="inquiry-app"><header className="app-header"><div className="mini-brand"><span>탐</span><div><strong>탐구 주제 찾기</strong><small>Inquiry Studio</small></div></div><div className="school-pill">고등학교 2학년 <span>⌄</span></div><button className="settings-button">⚙ Gemini API 설정</button></header><nav className="progress-nav"><button onClick={() => setStep(1)}>← 처음</button><span>학생 분석</span><strong>탐구 주제 찾기</strong></nav><div className="session-bar"><button>이전 세션 (2)⌄</button><button onClick={reset}>＋ 새 세션</button><button className="dark-button">저장</button></div><section className="topic-strip"><span>주제&nbsp; {topic}</span><i>›</i><b>관점 · {selected.name}</b></section><div className="step-content">{step === 1 && <Start student={student} setStudent={setStudent} onNext={generate} loading={loading} error={error} />}{step === 2 && <PerspectiveStep topic={topic} ai={ai} selected={selectedPerspective} setSelected={setSelectedPerspective} onNext={() => setStep(3)} onBack={() => setStep(1)} />}{step === 3 && <PathStep topic={topic} ai={ai} selected={selectedPath} setSelected={setSelectedPath} onNext={() => setStep(4)} onBack={() => setStep(2)} />}{step === 4 && <BasicStep topic={topic} selected={selected} path={ai?.paths?.[selectedPath] || defaultPaths[selectedPath]} ai={ai} onNext={() => setStep(5)} onBack={() => setStep(3)} />}{step === 5 && <DeepStep topic={topic} ai={ai} selected={selected} onNext={() => setStep(6)} onBack={() => setStep(4)} />}{step === 6 && <Report report={report} onReset={reset} />}</div></main>;
 }
 
-function Start({ student, setStudent, onNext }: { student: { number: string; name: string; topic: string }; setStudent: (v: { number: string; name: string; topic: string }) => void; onNext: () => void }) { return <section className="start-card"><div className="kicker warm">시작하기</div><h1>학번 · 이름으로 시작</h1><p>학번과 이름을 입력하면 새 탐구 주제 세션이 시작됩니다.</p><label>학번<input value={student.number} onChange={(e) => setStudent({ ...student, number: e.target.value })} placeholder="예: 10312" /></label><label>이름<input value={student.name} onChange={(e) => setStudent({ ...student, name: e.target.value })} placeholder="홍길동" /></label><label>관심 주제 또는 개념<textarea value={student.topic} onChange={(e) => setStudent({ ...student, topic: e.target.value })} placeholder="예: 기후 변화, 인공지능의 편향, 학교 일회용품 사용" rows={3} /></label><button className="gradient-button" onClick={onNext}>✦ 시작하기 →</button></section>; }
+function Start({ student, setStudent, onNext, loading, error }: { student: { number: string; name: string; topic: string }; setStudent: (value: { number: string; name: string; topic: string }) => void; onNext: () => void; loading: boolean; error: string }) { return <section className="start-card"><div className="kicker warm">시작하기</div><h1>학번 · 이름으로 시작</h1><p>관심 주제를 입력하면 Gemini가 2~5페이지의 탐구 흐름을 작성합니다.</p><label>학번<input value={student.number} onChange={(event) => setStudent({ ...student, number: event.target.value })} placeholder="예: 10312" /></label><label>이름<input value={student.name} onChange={(event) => setStudent({ ...student, name: event.target.value })} placeholder="홍길동" /></label><label>관심 주제 또는 개념<textarea value={student.topic} onChange={(event) => setStudent({ ...student, topic: event.target.value })} placeholder="예: 기후 변화, 인공지능의 편향, 학교 일회용품 사용" rows={4} /></label><button className="gradient-button" onClick={onNext} disabled={loading}>{loading ? "Gemini가 탐구 흐름을 작성 중..." : "✦ 시작하기 →"}</button>{error && <p className="generation-error">{error}</p>}</section>; }
 
-function PerspectiveStep({ topic, selected, setSelected, onNext, onBack }: { topic: string; selected: number; setSelected: (v: number) => void; onNext: () => void; onBack: () => void }) { return <StepFrame number="관점 - 10가지 사고 형식" title="이 주제를 어떤 관점으로 파고들래요?" subtitle={`'${topic}'을 어떤 렌즈로 보느냐에 따라 다른 탐구가 열립니다. 마음이 끌리는 관점 하나를 골라 보세요.`} onNext={onNext} onBack={onBack} color="violet"><div className="perspective-grid">{perspectives.map((item, index) => { const copy = getPerspectiveCopy(item, topic); return <button key={item.key} className={`perspective-card ${selected === index ? "chosen" : ""}`} onClick={() => setSelected(index)}><span className={`tag ${item.color}`}>관점 · {item.name}</span><strong>{copy.question}</strong><p>{item.description}</p><small className="example">예시 · {copy.example}</small></button>; })}</div><details className="more"><summary>＋ 한마디 더보기 (선택)</summary><p>정의, 범위, 유사성, 위계, 변수, 조건, 수단, 예외, 사례, 모형의 10가지 사고 형식은 익숙한 주제를 새로운 질문으로 바꾸는 렌즈입니다.</p></details></StepFrame>; }
+function Frame({ title, number, subtitle, children, onNext, onBack, color }: { title: string; number: string; subtitle: string; children: React.ReactNode; onNext: () => void; onBack: () => void; color: string }) { return <section className={`step-frame ${color}`}><div className="kicker">{number}</div><h1>{title}</h1><p className="subtitle">{subtitle}</p>{children}<div className="bottom-actions"><button onClick={onBack}>← 이전</button><button onClick={() => window.location.reload()}>↻ 다시 뽑기</button><button className="next-button" onClick={onNext}>다음 →</button></div></section>; }
 
-function PathStep({ topic, selected, setSelected, onNext, onBack }: { topic: string; selected: number; setSelected: (v: number) => void; onNext: () => void; onBack: () => void }) { return <StepFrame number="관점 안에서" title="어디를 파볼래요?" subtitle={`'${topic}'을 이 관점 안에서 어떻게 좁혀 볼지 골라 보세요.`} onNext={onNext} onBack={onBack} color="green"><div className="path-list">{paths.map((path, index) => { const copy = getPathCopy(path, topic); return <button key={path.title} className={`path-card ${selected === index ? "chosen" : ""}`} onClick={() => setSelected(index)}><span className="path-number">{index + 1}</span><div><strong>{path.title}</strong><h3>{copy.text}</h3><p>{copy.detail}</p></div></button>; })}</div><details className="more"><summary>＋ 한마디 더보기 (선택)</summary><p>길을 고른 뒤에는 관찰할 대상을 좁히고, 직접 시험할 수 있는 작은 질문으로 바꿔 봅니다.</p></details></StepFrame>; }
+function PerspectiveStep({ topic, ai, selected, setSelected, onNext, onBack }: { topic: string; ai: AiContent | null; selected: number; setSelected: (value: number) => void; onNext: () => void; onBack: () => void }) { return <Frame number="관점 - 10가지 사고 형식" title="이 주제를 어떤 관점으로 파고들래요?" subtitle={`'${topic}'에 대해 Gemini가 만든 관점별 질문과 예시입니다. 마음이 끌리는 관점 하나를 골라 보세요.`} onNext={onNext} onBack={onBack} color="violet"><div className="perspective-grid">{perspectives.map((item, index) => { const generated = ai?.perspectives?.find((value) => value.key === item.key); const copy = generated || fallbackCopy(item, topic); return <button key={item.key} className={`perspective-card ${selected === index ? "chosen" : ""}`} onClick={() => setSelected(index)}><span className={`tag ${item.color}`}>관점 · {item.name}</span><strong>{copy.question}</strong><p>{copy.description}</p><small className="example">예시 · {copy.example}</small></button>; })}</div><details className="more"><summary>＋ 한마디 더보기 (선택)</summary><p>Gemini는 입력 주제를 10가지 사고 형식으로 나누어 서로 다른 탐구 질문을 제안합니다.</p></details></Frame>; }
 
-function BasicInquiry({ selected, path, topic, onNext, onBack }: { selected: Perspective; path: typeof paths[number]; topic: string; onNext: () => void; onBack: () => void }) { return <StepFrame number="기본 탐구" title="이 길의 탐구를 한 번에" subtitle="고른 길의 탐구가 어떻게 펼쳐지는지 한 번에 보여 드립니다." onNext={onNext} onBack={onBack} color="cyan"><div className="inquiry-cards"><article><span>무엇을 묻나</span><strong>{selected.question}</strong></article><article><span>어떻게 알아보나</span><p>{path.detail} {topic}의 사례를 직접 만들고, 조건을 하나씩 바꾸어 결과를 비교합니다. 공식의 경계선과 모형의 변화를 표와 그림으로 기록합니다.</p></article><article><span>무엇을 만나게 되나</span><p>처음에는 익숙한 공식이 반복되지만, 분모의 형태와 수렴 조건을 바꾸는 순간 새로운 경계가 드러납니다. 그 경계에서 내가 세운 설명을 다시 점검하게 됩니다.</p></article></div></StepFrame>; }
+function PathStep({ topic, ai, selected, setSelected, onNext, onBack }: { topic: string; ai: AiContent | null; selected: number; setSelected: (value: number) => void; onNext: () => void; onBack: () => void }) { const paths = ai?.paths?.length ? ai.paths : defaultPaths; return <Frame number="관점 안에서" title="어디를 파볼래요?" subtitle={`'${topic}'을 선택한 관점 안에서 어떻게 좁혀 볼지 골라 보세요.`} onNext={onNext} onBack={onBack} color="green"><div className="path-list">{paths.map((path, index) => <button key={path.title} className={`path-card ${selected === index ? "chosen" : ""}`} onClick={() => setSelected(index)}><span className="path-number">{index + 1}</span><div><strong>{path.title}</strong><h3>{path.text}</h3><p>{path.detail}</p></div></button>)}</div></Frame>; }
 
-function Deepen({ selected, onNext, onBack }: { selected: Perspective; onNext: () => void; onBack: () => void }) { const deepen = [{ title: "무너지는 방식의 지형도", text: "공식이 무너지는 방식 자체가 형태마다 어떻게 다른지 - 계수가 흔들리는지, 항의 개수가 늘어나는지, 표현 범주 자체가 바뀌는지 -를 정밀하게 갈라 볼 수 있습니다." }, { title: "확장 모형의 최소 조건", text: "경계에서 공식을 되살리려면 최소한 어떤 조각을 더 넣어야 하는가? 분모의 형태가 강제하는 조건을 찾아 새로운 모형의 원리를 세워 봅니다." }, { title: "기하가 먼저 어긋나는 순간", text: "대수 규칙이 무너지기 직전, 기하적 표현은 먼저 어긋나기 시작하는가? 수식과 그림을 나란히 놓고 빠르게 변화를 관찰합니다." }]; return <StepFrame number="더 깊이 - 1단" title="한 층 더 깊이" subtitle={`지금 관점에서 한 층 더 들어가는 세 갈래입니다.`} onNext={onNext} onBack={onBack} color="violet"><div className="deep-list">{deepen.map((item, index) => <article key={item.title}><span>{index + 1}</span><div><strong>{item.title}</strong><h3>{index === 0 ? selected.question : item.text}</h3><p>{item.text}</p></div></article>)}</div><button className="more-button" onClick={onNext}>＋ 2개 더 보기</button></StepFrame>; }
+function BasicStep({ topic, selected, path, ai, onNext, onBack }: { topic: string; selected: Perspective; path: { title: string; text: string; detail: string }; ai: AiContent | null; onNext: () => void; onBack: () => void }) { const basic = ai?.basic || { what: `${topic}의 핵심 현상은 무엇인가?`, how: `${path.detail} 사례를 하나씩 바꾸며 결과를 비교합니다.`, discover: `${topic}을 설명하는 조건과 예외를 함께 만나게 됩니다.` }; return <Frame number="기본 탐구" title="이 길의 탐구를 한 번에" subtitle="선택한 주제와 경로가 어떤 탐구로 펼쳐지는지 한 번에 보여 드립니다." onNext={onNext} onBack={onBack} color="cyan"><div className="inquiry-cards"><article><span>무엇을 묻나 · {selected.name}</span><strong>{basic.what}</strong></article><article><span>어떻게 알아보나 · {path.title}</span><p>{basic.how}</p></article><article><span>무엇을 만나게 되나</span><p>{basic.discover}</p></article></div></Frame>; }
 
-function Report({ report, onReset }: { report: { title: string; intro: string; method: string }; onReset: () => void }) { return <section className="report"><div className="kicker dark">마무리 - 탐구 보고서 목차</div><h1>탐구 목차 · 서론 · 본론 · 결론</h1><p>지금까지의 선택과 정교화가 한 꼭 고등학교 탐구 보고서 양식의 목차로 정리됩니다.</p><label>보고서 제목<textarea value={report.title} readOnly rows={2} /></label><h2>I. 서론</h2><article className="report-card"><b>1.1</b><strong>탐구 동기와 배경</strong><textarea defaultValue={report.intro} rows={3} /></article><article className="report-card"><b>1.2</b><strong>탐구 질문 및 목적</strong><textarea defaultValue={report.method} rows={4} /></article><h2>II. 본론</h2><article className="report-card"><b>2.1</b><strong>이론적 배경 - 부분분수 분해와 수열·급수</strong><textarea defaultValue="부분분수 분해의 기본 원리와 선택한 관점의 핵심 개념을 정리한다." rows={3} /></article><article className="report-card"><b>2.2</b><strong>탐구 방법 - 형태를 한 겹씩 바꿔 밀어보기</strong><textarea defaultValue="분모의 형태를 단계적으로 바꾸며 공식의 경계선과 예외를 표로 기록한다." rows={3} /></article><div className="report-actions"><button onClick={onReset}>↻ 기본 탐구 다시 보기</button><button className="gradient-button" onClick={() => alert("탐구 세션을 저장했습니다.")}>세션 저장</button></div></section>; }
+function DeepStep({ topic, ai, selected, onNext, onBack }: { topic: string; ai: AiContent | null; selected: Perspective; onNext: () => void; onBack: () => void }) { const items = ai?.deepening?.length ? ai.deepening : [{ title: "무너지는 방식의 지형도", text: `${topic}이(가) 달라지는 방식은 조건마다 어떻게 다른가?` }, { title: "확장 모형의 최소 조건", text: `${topic}을 더 넓게 설명하려면 어떤 조건을 추가해야 하는가?` }, { title: "예외가 시작되는 순간", text: `${topic}에 대한 일반적인 설명이 어긋나기 시작하는 지점은 어디인가?` }]; return <Frame number="더 깊이 - 1단" title="한 층 더 깊이" subtitle={`${selected.name} 관점에서 ${topic}을 한 단계 더 밀어 보는 질문입니다.`} onNext={onNext} onBack={onBack} color="violet"><div className="deep-list">{items.map((item, index) => <article key={item.title}><span>{index + 1}</span><div><strong>{item.title}</strong><h3>{item.text}</h3><p>자료를 모으고 비교한 뒤, 이 질문에 대한 근거를 자신의 말로 기록합니다.</p></div></article>)}</div></Frame>; }
 
-function StepFrame({ number, title, subtitle, children, onNext, onBack, color }: { number: string; title: string; subtitle: string; children: React.ReactNode; onNext: () => void; onBack: () => void; color: string }) { return <section className={`step-frame ${color}`}><div className="kicker">{number}</div><h1>{title}</h1><p className="subtitle">{subtitle}</p>{children}<div className="bottom-actions"><button onClick={onBack}>← 이전</button><button onClick={() => window.location.reload()}>↻ 다시 뽑기</button><button className="next-button" onClick={onNext}>다음 →</button></div></section>; }
+function Report({ report, onReset }: { report: AiContent["report"]; onReset: () => void }) { return <section className="report"><div className="kicker dark">마무리 - 탐구 보고서 목차</div><h1>탐구 목차 · 서론 · 본론 · 결론</h1><p>Gemini가 지금까지의 선택을 탐구 보고서 양식의 목차로 정리했습니다.</p><label>보고서 제목<textarea value={report.title} readOnly rows={2} /></label><h2>I. 서론</h2><article className="report-card"><b>1.1</b><strong>탐구 동기와 배경</strong><textarea defaultValue={report.intro} rows={3} /></article><article className="report-card"><b>1.2</b><strong>탐구 질문 및 목적</strong><textarea defaultValue={report.question} rows={3} /></article><h2>II. 본론</h2><article className="report-card"><b>2.1</b><strong>이론적 배경</strong><textarea defaultValue={report.background} rows={3} /></article><article className="report-card"><b>2.2</b><strong>탐구 방법</strong><textarea defaultValue={report.method} rows={3} /></article><div className="report-actions"><button onClick={onReset}>↻ 새 주제로 다시 시작</button><button className="gradient-button" onClick={() => alert("탐구 세션을 저장했습니다.")}>세션 저장</button></div></section>; }
