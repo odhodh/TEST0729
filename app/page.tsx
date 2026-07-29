@@ -44,6 +44,7 @@ export default function Home() {
   const [generated, setGenerated] = useState<Generated | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Path[] | null>(null);
   const [expanding, setExpanding] = useState(false);
+  const [saveNotice, setSaveNotice] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [message, setMessage] = useState("");
   const lens = lenses[lensIndex];
@@ -55,6 +56,8 @@ export default function Home() {
     `서로 다른 사례에서도 ${lens.name}의 설명이 같은 방식으로 적용될까?`,
     `현재 자료로 설명되지 않는 예외를 만난다면 어떤 가설을 세울 수 있을까?`,
   ];
+  const reportTitle = `${topic || "탐구 주제"} — ${lens.name} 관점에서 ${path.title}`;
+  const reportText = createReportText({ title: reportTitle, topic, direction, lens, path, blueprint, deepQuestion: deepQuestions[deepIndex] });
 
   async function startDirection() {
     if (!topic.trim()) { setMessage("먼저 탐구하고 싶은 주제나 키워드를 입력해 주세요."); return; }
@@ -82,6 +85,21 @@ export default function Home() {
     } catch { setExpandedPaths(null); setMessage("AI 연결이 없어도 세 갈래의 기본 탐구 길을 확인할 수 있습니다."); }
     setPathIndex(0); setExpanding(false); setStep(3);
   }
+  function saveReport() {
+    const savedAt = new Date().toLocaleString("ko-KR");
+    localStorage.setItem("inquiry-studio-report", JSON.stringify({ title: reportTitle, content: reportText, savedAt }));
+    setSaveNotice(`이 브라우저에 ${savedAt}에 저장했습니다.`);
+  }
+  function downloadReport() {
+    saveReport();
+    const blob = new Blob([reportText], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${(topic || "탐구보고서").replace(/[\\/:*?"<>|]/g, "_")}_탐구보고서.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   function reset() { setStep(1); setInputPhase("topic"); setTopic(""); setDirection(null); setLensIndex(0); setPathIndex(0); setDeepIndex(0); setGenerated(null); setExpandedPaths(null); setMessage(""); }
   function nextStep() { setStep((current) => Math.min(5, current + 1)); }
@@ -92,10 +110,14 @@ export default function Home() {
     {step === 2 && <section><StepHeader eyebrow="STEP 2 · 사고 형식" title="이 주제를 어떤 관점으로 바라볼까요?" description="같은 주제도 어떤 질문을 던지느냐에 따라 전혀 다른 탐구가 됩니다. 10가지 렌즈 중 가장 끌리는 관점 하나를 골라 보세요." /><div className="lens-grid">{lenses.map((item, index) => { const aiLens = generated?.perspectives?.find((value) => value.key === ["definition", "scope", "similarity", "hierarchy", "variable", "condition", "method", "exception", "case", "model"][index]); return <button className={`lens-card ${lensIndex === index ? "selected" : ""}`} onClick={() => setLensIndex(index)} key={item.name}><span>관점 {index + 1}</span><strong>[{item.name}] {aiLens?.question || item.question}</strong><p>{aiLens?.description || item.description}</p><em>{aiLens?.example ? `탐구 방향 예시 · ${aiLens.example}` : `${item.name} 관점으로 ${topic || "이 주제"}의 새로운 구조를 발견해 보세요.`}</em></button>; })}</div><StepActions onBack={previousStep} onNext={expandLens} next={expanding ? "세 갈래의 길을 설계하는 중…" : "이 관점으로 확장하기 →"} disabled={expanding} /></section>}
     {step === 3 && <section><StepHeader eyebrow="STEP 3 · 세 갈래의 탐구 길" title={`${lens.name} 관점으로 어느 결을 따라갈까요?`} description={`선택한 ‘${lens.name}’ 관점을 ${topic}에 적용한 세 갈래의 길입니다. 난이도가 아니라 무엇을 돋보기로 확대할지에 따라 결이 달라집니다.`} /><div className="selected-summary"><span>선택한 관점</span><strong>{lens.name} · {lens.label}</strong><p>{lens.question}</p></div><div className="path-grid">{paths.map((item, index) => <button className={`path-card-new ${pathIndex === index ? "selected" : ""}`} onClick={() => setPathIndex(index)} key={item.title}><span className="path-index">0{index + 1}</span><strong>{item.title}</strong><h3>핵심 질문</h3><p>{item.question}</p><h3>파고드는 결 · {item.focus}</h3><em>{item.detail}</em></button>)}</div>{message && <p className="notice">{message}</p>}<StepActions onBack={previousStep} onNext={nextStep} next="이 길로 설계하기 →" /></section>}
     {step === 4 && <section><StepHeader eyebrow="STEP 4 · 탐구 청사진" title="이 길을 실제 탐구로 바꿔 볼까요?" description="무엇을 묻고, 어떻게 알아보고, 무엇을 만나게 될지 한 장의 청사진으로 정리했습니다." /><div className="blueprint-grid"><article><span>무엇을 묻나</span><h2>{blueprint.what}</h2><p>선택한 길의 중심에 놓인 핵심 질문입니다.</p></article><article><span>어떻게 알아보나</span><h2>{blueprint.how}</h2><p>자료 조사와 관찰·비교 절차를 구체화해 보세요.</p></article><article><span>무엇을 만나게 되나</span><h2>{blueprint.discover}</h2><p>예상되는 발견뿐 아니라 자료의 한계도 기록합니다.</p></article></div><div className="deep-section"><span className="section-label">한 층 더 깊이 들어가기</span><h2>어떤 심화 질문이 가장 마음에 남나요?</h2><div className="deep-grid">{deepQuestions.map((question, index) => <button className={deepIndex === index ? "selected" : ""} onClick={() => setDeepIndex(index)} key={question}><b>0{index + 1}</b><span>{question}</span></button>)}</div></div><StepActions onBack={previousStep} onNext={nextStep} next="목차 만들기 →" /></section>}
-    {step === 5 && <section><StepHeader eyebrow="STEP 5 · 탐구 보고서" title="탐구 보고서의 뼈대가 완성됐어요" description="지금까지 선택한 흐름을 실제 보고서에 옮길 수 있도록 I. 서론 · II. 본론 · III. 결론 구조로 정리했습니다." /><div className="report-title"><span>보고서 제목 제안</span><h2>{topic} — {lens.name} 관점에서 {path.title}</h2></div><ReportSection title="I. 서론" items={[["1.1", "탐구 동기와 배경", `${topic}에 관심을 갖게 된 계기와 일상에서 발견한 문제 상황을 구체적으로 씁니다.`], ["1.2", "탐구 질문과 목적", `${blueprint.what}을 중심 질문으로 제시하고, ${lens.name} 관점과 선택한 탐구 방향을 설명합니다.`], ["1.3", "탐구 범위와 순서", "조사 대상·기간·자료의 범위를 정하고 어떤 순서로 답을 찾아갈지 안내합니다."]]} /><ReportSection title="II. 본론" items={[["2.1", "개념과 선행 자료", `${topic}의 주요 개념을 정의하고 논문·학술지·전공 서적·뉴스 자료를 비교해 정리합니다.`], ["2.2", "탐구 방법과 분석", blueprint.how], ["2.3", "심화 질문 분석", `${deepQuestions[deepIndex]}에 답하기 위해 수집한 사례와 근거를 표·도식·문단으로 분석합니다.`]]} /><ReportSection title="III. 결론" items={[["3.1", "발견과 해석", "자료에서 확인한 패턴을 요약하되, 자료가 보여 주는 범위 안에서 신중하게 해석합니다."], ["3.2", "한계와 후속 질문", `${blueprint.discover}를 바탕으로 이번 탐구에서 남은 한계와 다음 탐구 질문을 씁니다.`]]} /><div className="final-actions"><button className="secondary-button" onClick={previousStep}>← 청사진으로 돌아가기</button><button className="primary-button compact" onClick={() => window.print()}>보고서 인쇄 / PDF 저장</button></div></section>}
+    {step === 5 && <section><StepHeader eyebrow="STEP 5 · 탐구 보고서" title="탐구 보고서의 뼈대가 완성됐어요" description="지금까지 선택한 흐름을 실제 보고서에 옮길 수 있도록 I. 서론 · II. 본론 · III. 결론 구조로 정리했습니다." /><div className="report-title"><span>보고서 제목 제안</span><h2>{reportTitle}</h2></div><ReportSection title="I. 서론" items={[["1.1", "탐구 동기와 배경", `${topic}에 관심을 갖게 된 계기와 일상에서 발견한 문제 상황을 구체적으로 씁니다.`], ["1.2", "탐구 질문과 목적", `${blueprint.what}을 중심 질문으로 제시하고, ${lens.name} 관점과 선택한 탐구 방향을 설명합니다.`], ["1.3", "탐구 범위와 순서", "조사 대상·기간·자료의 범위를 정하고 어떤 순서로 답을 찾아갈지 안내합니다."]]} /><ReportSection title="II. 본론" items={[["2.1", "개념과 선행 자료", `${topic}의 주요 개념을 정의하고 논문·학술지·전공 서적·뉴스 자료를 비교해 정리합니다.`], ["2.2", "탐구 방법과 분석", blueprint.how], ["2.3", "심화 질문 분석", `${deepQuestions[deepIndex]}에 답하기 위해 수집한 사례와 근거를 표·도식·문단으로 분석합니다.`]]} /><ReportSection title="III. 결론" items={[["3.1", "발견과 해석", "자료에서 확인한 패턴을 요약하되, 자료가 보여 주는 범위 안에서 신중하게 해석합니다."], ["3.2", "한계와 후속 질문", `${blueprint.discover}를 바탕으로 이번 탐구에서 남은 한계와 다음 탐구 질문을 씁니다.`]]} /><div className="final-actions"><button className="secondary-button" onClick={previousStep}>← 청사진으로 돌아가기</button><button className="secondary-button" onClick={saveReport}>브라우저에 저장</button><button className="primary-button compact" onClick={downloadReport}>텍스트 파일 저장</button><button className="primary-button compact" onClick={() => window.print()}>인쇄 / PDF 저장</button></div>{saveNotice && <p className="save-notice">{saveNotice}</p>}</section>}
   </section><footer><span>탐구는 답을 받는 일이 아니라, 더 좋은 질문을 만드는 일입니다.</span><button onClick={reset}>새 탐구 시작</button></footer></main>;
 }
 
 function StepActions({ onBack, onNext, next, disabled = false }: { onBack: () => void; onNext: () => void; next: string; disabled?: boolean }) { return <div className="step-actions"><button className="secondary-button" onClick={onBack}>← 이전</button><button className="primary-button compact" onClick={onNext} disabled={disabled}>{next}</button></div>; }
 
 function ReportSection({ title, items }: { title: string; items: string[][] }) { return <section className="report-section"><h2>{title}</h2>{items.map(([number, heading, body]) => <article key={number}><b>{number}</b><div><strong>{heading}</strong><p>{body}</p><small>• 핵심 개념과 근거 자료를 구체적으로 기록하기<br />• 자신의 관찰과 해석을 근거와 구분해 쓰기</small></div></article>)}</section>; }
+
+function createReportText({ title, topic, direction, lens, path, blueprint, deepQuestion }: { title: string; topic: string; direction: Direction | null; lens: Lens; path: Path; blueprint: { what: string; how: string; discover: string }; deepQuestion: string }) {
+  return `# ${title}\n\n- 탐구 주제: ${topic}\n- 탐구 방향: ${direction === "humanities" ? "인문·사회·예술" : "과학·기술·수리"}\n- 선택 관점: ${lens.name} · ${lens.label}\n- 선택한 탐구 길: ${path.title}\n\n## I. 서론\n\n### 1.1 탐구 동기와 배경\n${topic}에 관심을 갖게 된 계기와 일상에서 발견한 문제 상황을 구체적으로 씁니다.\n\n### 1.2 탐구 질문과 목적\n${blueprint.what}\n\n### 1.3 탐구 범위와 순서\n조사 대상·기간·자료의 범위를 정하고 어떤 순서로 답을 찾아갈지 안내합니다.\n\n## II. 본론\n\n### 2.1 개념과 선행 자료\n${topic}의 주요 개념을 정의하고 논문·학술지·전공 서적·뉴스 자료를 비교해 정리합니다.\n\n### 2.2 탐구 방법과 분석\n${blueprint.how}\n\n### 2.3 심화 질문 분석\n${deepQuestion}\n\n## III. 결론\n\n### 3.1 발견과 해석\n자료에서 확인한 패턴을 요약하되, 자료가 보여 주는 범위 안에서 신중하게 해석합니다.\n\n### 3.2 한계와 후속 질문\n${blueprint.discover}\n`;
+}
