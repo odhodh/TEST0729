@@ -57,29 +57,32 @@ export async function POST(request: Request) {
 [관련 학술 자료 목록]
 ${researchCatalog}
 
-선택한 '구체 사례'를 출발점으로만 삼아 서로 다른 세 길을 만드세요. 단순한 난이도 차이가 아니라, 1번은 사례의 내부 조건·작동 한계, 2번은 다른 대상·환경으로의 비교와 변형, 3번은 구조·자료·모형을 새롭게 읽는 길처럼 포커스와 자료 다루는 방식이 확실히 달라야 합니다. 주제나 관점의 일반적 정의를 반복하지 마세요.
+선택한 '구체 사례'를 출발점으로만 삼아 서로 다른 세 길을 만드세요. 단순한 난이도 차이가 아니라, 1번은 사례의 내부 조건·작동 한계, 2번은 다른 대상·환경으로의 비교와 변형, 3번은 구조·자료·모형을 새롭게 읽는 길처럼 포커스와 자료 다루는 방식이 확실히 달라야 합니다. 주제나 관점의 일반적 정의, “조건을 바꿔 본다”, “자료를 비교한다”처럼 대상이 빠진 진행 안내를 반복하지 마세요.
 
-각 길의 detail은 정확히 5~6개의 완결된 한국어 문장으로 쓰세요. 첫 문장은 선택 사례의 구체적 연구 장면을 열고, 둘째 문장은 학생이 살펴볼 자료·논문·실험값·기록을 밝히고, 셋째와 넷째 문장은 비교·실험·증명·해석의 실제 행동을 제안하고, 마지막 문장은 예상되는 경계·예외·발견을 생생하게 제시하세요. 자료 목록을 참고한 경우 sourceIndex에 그 번호를 넣으세요. 자료가 없거나 직접 연결하기 어렵다면 sourceIndex는 생략하세요.
+각 길의 detail은 정확히 5~6개의 완결된 한국어 문장으로 쓰세요. 매 길에는 반드시 주제에 맞는 실제 대상·장면을 하나 이상 이름으로 넣으세요. 예를 들어 MOF 약물 전달이라면 “UiO-66에 독소루비신을 적재한 뒤 pH 7.4와 pH 5.5에서 방출량을 비교한다”처럼 물질·대상·조건·수치 또는 시기 중 둘 이상이 드러나야 합니다. 첫 문장은 선택 사례의 구체적 연구 장면을 열고, 둘째 문장은 학생이 실제로 읽을 논문·데이터셋·실험값·기사·기록을 밝히고, 셋째와 넷째 문장은 무엇을 나란히 놓고 어떤 표·그래프·계산·해석을 만들지 구체적으로 제안하고, 마지막 문장은 그 사례에서 예상되는 경계·예외·발견을 생생하게 제시하세요. 학술 자료 목록의 제목·대상·방법을 가능한 한 활용하되, 목록에 없는 논문 제목이나 수치를 지어내지는 마세요. 자료 목록을 참고한 경우 sourceIndex에 그 번호를 넣으세요. 자료가 없거나 직접 연결하기 어렵다면 sourceIndex는 생략하세요.
 
 JSON만 반환하세요.
 {"approaches":[{"title":"매력적인 길의 제목","focus":"이 길의 고유한 초점","question":"학생이 던질 날카로운 질문","detail":"정확히 5~6문장의 구체적인 탐구 제안.","sourceIndex":1}]}`;
 
-  const call = (modelName: string, structured: boolean) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.65, ...(structured ? { responseMimeType: "application/json" } : {}) } }) });
-  let response = await call(model, true);
-  if (response.status === 404 && model !== "gemini-2.5-flash") response = await call("gemini-2.5-flash", true);
-  if (!response.ok) return NextResponse.json({ error: `Gemini 호출에 실패했습니다. (${response.status})` }, { status: 502 });
-  let result = await response.json();
-  let text = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  let parsed: unknown;
-  try { parsed = JSON.parse(text.replace(/^```json\s*|\s*```$/g, "")); } catch { parsed = null; }
-  let approaches = validateApproaches(parsed, sources);
-  if (!approaches) {
-    response = await call(model, false);
-    if (!response.ok) return NextResponse.json({ error: "Gemini 응답 형식을 확인하지 못했습니다." }, { status: 502 });
-    result = await response.json(); text = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    try { parsed = JSON.parse(text.replace(/^```json\s*|\s*```$/g, "")); } catch { parsed = null; }
-    approaches = validateApproaches(parsed, sources);
+  const call = (modelName: string, structured: boolean, correction = "") => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: `${prompt}${correction}` }] }], generationConfig: { temperature: 0.55, maxOutputTokens: 4096, ...(structured ? { responseMimeType: "application/json" } : {}) } }) });
+  const retryModels = [...new Set([model, "gemini-2.5-flash"])];
+  let lastStatus = 502;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const modelName = retryModels[Math.min(attempt, retryModels.length - 1)];
+    const correction = attempt === 0 ? "" : `\n\n[재생성 지시 ${attempt}/4] 이전 응답은 카드 수·JSON 형식·문장 수 또는 구체적 사례 조건을 충족하지 못했습니다. 세 카드 모두를 처음부터 다시 쓰고, 각 detail에 이름 있는 실제 대상과 구체 조건을 넣으세요. JSON 이외의 문자는 절대 쓰지 마세요.`;
+    try {
+      const response = await call(modelName, attempt < 3, correction);
+      lastStatus = response.status;
+      if (!response.ok) continue;
+      const result = await response.json();
+      const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      let parsed: unknown;
+      try { parsed = JSON.parse(text.replace(/^```json\s*|\s*```$/g, "")); } catch { parsed = null; }
+      const approaches = validateApproaches(parsed, sources);
+      if (approaches) return NextResponse.json({ approaches, attempts: attempt + 1 });
+    } catch {
+      // 일시적인 네트워크 오류도 다음 시도에서 다시 생성한다.
+    }
   }
-  if (!approaches) return NextResponse.json({ error: "Gemini가 세 갈래 탐구 내용을 완성하지 못했습니다." }, { status: 502 });
-  return NextResponse.json({ approaches });
+  return NextResponse.json({ error: "Gemini가 여러 차례 재생성했지만 세 갈래 탐구 내용을 완성하지 못했습니다.", attempts: 5, status: lastStatus }, { status: 502 });
 }
