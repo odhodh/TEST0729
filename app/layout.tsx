@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata: Metadata = { title: "세특 스튜디오", description: "학생 활동을 과목별 세부능력 및 특기사항 초안으로 정리하는 교사용 워크스페이스" };
+export const metadata: Metadata = { title: "탐구 주제 찾기", description: "10가지 사고 형식으로 학생의 탐구 주제를 찾아가는 Inquiry Studio" };
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) { return <html lang="ko"><body>{children}</body></html>; }
